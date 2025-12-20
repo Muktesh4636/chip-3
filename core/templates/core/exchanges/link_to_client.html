@@ -20,19 +20,24 @@
         
         <div class="form-row">
             <label class="field-label">My Share % (Your share of profits) *</label>
-            <input type="number" name="my_share_pct" id="my-share-input" class="field-input" step="0.01" min="0" max="100" required placeholder="e.g., 10.00" oninput="validateCompanyShare()">
+            <input type="number" name="my_share_pct" id="my-share-input" class="field-input" step="0.01" min="0" max="100" required placeholder="e.g., 10.00" {% if client_type == 'company' %}oninput="validateCompanyShare()"{% endif %}>
             <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Your percentage share of profits</div>
         </div>
         
+        {% if client_type == 'company' %}
         <div class="form-row">
-            <label class="field-label">Company Share % (From your profit) *</label>
-            <input type="number" name="company_share_pct" id="company-share-input" class="field-input" step="0.01" min="0" max="100" required placeholder="e.g., 5.00" oninput="validateCompanyShare()">
-            <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Must be less than your share</div>
+            <label class="field-label">Company Share % (From CLIENT's share) *</label>
+            <input type="number" name="company_share_pct" id="company-share-input" class="field-input" step="0.01" min="0" max="100" required placeholder="e.g., 9.00" oninput="validateCompanyShare(); updateExample()">
+            <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+                Percentage of CLIENT's share that company gets. Example: If your share is 30% and company share is 9%, company gets 9% of the client's 70% share.
+            </div>
+            <div id="example-calculation" style="font-size: 12px; color: var(--accent); margin-top: 4px; font-weight: 500; display: none;"></div>
             <div id="validation-message" style="font-size: 12px; color: var(--danger); margin-top: 4px; display: none;"></div>
             {% if error %}
                 <div style="font-size: 12px; color: var(--danger); margin-top: 4px;">{{ error }}</div>
             {% endif %}
         </div>
+        {% endif %}
         
         <div class="form-row">
             <label style="display: flex; align-items: center; gap: 8px;">
@@ -43,35 +48,66 @@
         
         <div style="display: flex; gap: 12px; margin-top: 20px;">
             <button type="submit" class="btn btn-primary" id="submit-btn">Link Exchange</button>
-            <a href="{% url 'clients:detail' client.pk %}" class="btn">Cancel</a>
+            <a href="{% if client_type == 'company' %}{% url 'company_clients:detail' client.pk %}{% else %}{% url 'my_clients:detail' client.pk %}{% endif %}" class="btn">Cancel</a>
         </div>
     </form>
 </div>
 
 <script>
+{% if client_type == 'company' %}
 function validateCompanyShare() {
-    const myShare = parseFloat(document.getElementById('my-share-input').value) || 0;
-    const companyShare = parseFloat(document.getElementById('company-share-input').value) || 0;
+    const companyShareInput = document.getElementById('company-share-input');
+    if (!companyShareInput) return;
+    
+    const companyShare = parseFloat(companyShareInput.value) || 0;
     const messageDiv = document.getElementById('validation-message');
     const submitBtn = document.getElementById('submit-btn');
     
-    if (companyShare > 0 && myShare > 0) {
-        if (companyShare >= myShare) {
-            messageDiv.textContent = 'Company share must be less than your share';
-            messageDiv.style.display = 'block';
-            submitBtn.disabled = true;
-            submitBtn.style.opacity = '0.5';
-        } else {
-            messageDiv.style.display = 'none';
-            submitBtn.disabled = false;
-            submitBtn.style.opacity = '1';
-        }
+    if (companyShare >= 100) {
+        messageDiv.textContent = 'Company share must be less than 100%';
+        messageDiv.style.display = 'block';
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.5';
     } else {
         messageDiv.style.display = 'none';
         submitBtn.disabled = false;
         submitBtn.style.opacity = '1';
     }
 }
+
+function updateExample() {
+    const myShareInput = document.getElementById('my-share-input');
+    const companyShareInput = document.getElementById('company-share-input');
+    const exampleDiv = document.getElementById('example-calculation');
+    
+    if (!myShareInput || !companyShareInput || !exampleDiv) return;
+    
+    const myShare = parseFloat(myShareInput.value) || 0;
+    const companyShare = parseFloat(companyShareInput.value) || 0;
+    
+    if (myShare > 0 && companyShare > 0 && companyShare < 100 && myShare < 100) {
+        const exampleProfit = 1000;
+        const yourProfit = (exampleProfit * myShare) / 100;
+        const clientShare = exampleProfit - yourProfit;
+        const companyGets = (clientShare * companyShare) / 100;
+        const clientKeeps = clientShare - companyGets;
+        
+        exampleDiv.innerHTML = `Example: If profit is ₹${exampleProfit}, you get ₹${yourProfit.toFixed(2)} (${myShare}%), client gets ₹${clientShare.toFixed(2)} (${100-myShare}%), company gets ₹${companyGets.toFixed(2)} (${companyShare}% of client's ${100-myShare}%), client keeps ₹${clientKeeps.toFixed(2)}`;
+        exampleDiv.style.display = 'block';
+    } else {
+        exampleDiv.style.display = 'none';
+    }
+}
+
+// Update example when my share changes too
+const myShareInput = document.getElementById('my-share-input');
+if (myShareInput) {
+    myShareInput.addEventListener('input', function() {
+        validateCompanyShare();
+        updateExample();
+    });
+}
+{% endif %}
 </script>
 {% endblock %}
 

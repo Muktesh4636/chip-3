@@ -84,6 +84,7 @@
                 <td>₹ {{ tx.client_share_amount|default:0 }}</td>
                 <td>₹ {{ tx.company_share_amount|default:0 }}</td>
                 <td>
+                    <a href="{% url 'transactions:detail' tx.pk %}" class="btn btn-sm" style="margin-right: 4px;">View</a>
                     <a href="{% url 'transactions:edit' tx.pk %}" class="btn btn-sm">Edit</a>
                 </td>
             </tr>

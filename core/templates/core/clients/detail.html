@@ -6,7 +6,7 @@
 
 {% block page_actions %}
 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-    <a href="{% url 'exchanges:link_to_client' client.pk %}" class="btn btn-primary">Link Exchange</a>
+    <a href="{% if client_type == 'company' %}{% url 'company_clients:link_exchange' client.pk %}{% else %}{% url 'my_clients:link_exchange' client.pk %}{% endif %}" class="btn btn-primary">Link Exchange</a>
     <button onclick="showGiveMoneyForm()" class="btn" style="background: var(--success); color: white;">Give Money</button>
     <a href="{% if client_type == 'company' %}{% url 'company_clients:balance' client.pk %}{% else %}{% url 'my_clients:balance' client.pk %}{% endif %}" class="btn">View Balance</a>
     <a href="{% if client_type == 'company' %}{% url 'company_clients:report' client.pk %}{% else %}{% url 'my_clients:report' client.pk %}{% endif %}" class="btn">View Report</a>

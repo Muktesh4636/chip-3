@@ -181,10 +181,12 @@
             <td>Admin Pays ({{ settings.admin_profit_share_pct }}% of profit)</td>
             <td style="color: var(--danger);">₹ {{ balance.admin_pays|default:balance.admin_loss|floatformat:2 }}</td>
         </tr>
+        {% if client_type == 'company' %}
         <tr>
             <td>Company Pays ({{ settings.company_profit_share_pct }}% of profit)</td>
             <td>₹ {{ balance.company_pays|default:balance.company_share_loss|floatformat:2 }}</td>
         </tr>
+        {% endif %}
         <tr>
             <td><strong>Total Payable to Client</strong></td>
             <td><strong style="color: var(--danger);">₹ {{ balance.client_profit|default:balance.client_profit_loss|floatformat:2 }}</strong></td>
@@ -194,10 +196,12 @@
             <td>Admin Earns ({{ settings.admin_loss_share_pct }}% of loss)</td>
             <td style="color: var(--success);">₹ {{ balance.admin_earns|default:balance.admin_profit|floatformat:2 }}</td>
         </tr>
+        {% if client_type == 'company' %}
         <tr>
             <td>Company Earns ({{ settings.company_loss_share_pct }}% of loss)</td>
             <td>₹ {{ balance.company_earns|default:balance.company_share_profit|floatformat:2 }}</td>
         </tr>
+        {% endif %}
         <tr>
             <td><strong>Admin Net</strong></td>
             <td><strong>₹ {{ balance.admin_net|floatformat:2 }}</strong></td>
@@ -208,7 +212,7 @@
 </div>
 
 <!-- Daily Balance History -->
-{% if balance.daily_balances %}
+{% if client_type == 'company' and balance.daily_balances %}
 <div class="table-wrapper" style="margin-bottom: 24px;">
     <div class="table-header">
         <div>Daily Balance Records (Last 10)</div>
@@ -273,8 +277,11 @@
                     <th>Amount</th>
                     <th>Your Share</th>
                     <th>Client Share</th>
+                    {% if client_type == 'company' %}
                     <th>Company Share</th>
+                    {% endif %}
                     <th>Note</th>
+                    <th>Actions</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -298,8 +305,13 @@
                         <td><strong>₹ {{ tx.amount|floatformat:2 }}</strong></td>
                         <td>₹ {{ tx.your_share_amount|floatformat:2 }}</td>
                         <td>₹ {{ tx.client_share_amount|floatformat:2 }}</td>
+                        {% if client_type == 'company' %}
                         <td>₹ {{ tx.company_share_amount|floatformat:2 }}</td>
+                        {% endif %}
                         <td style="color: var(--muted); font-size: 13px;">{{ tx.note|default:"—"|truncatewords:10 }}</td>
+                        <td>
+                            <a href="{% url 'transactions:detail' tx.pk %}" class="btn btn-sm">View Details</a>
+                        </td>
                     </tr>
                 {% endfor %}
                 </tbody>

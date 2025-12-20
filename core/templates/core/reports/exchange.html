@@ -170,7 +170,7 @@
 <script>
 // Wait for Chart.js to load
 document.addEventListener('DOMContentLoaded', function() {
-    // Transaction Type Chart
+// Transaction Type Chart
     const typeCtx = document.getElementById('typeChart');
     if (typeCtx && typeof Chart !== 'undefined') {
         try {
@@ -180,35 +180,35 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (typeLabels && typeLabels.length > 0) {
                 new Chart(typeCtx.getContext('2d'), {
-                    type: 'doughnut',
-                    data: {
+    type: 'doughnut',
+    data: {
                         labels: typeLabels,
-                        datasets: [{
+        datasets: [{
                             data: typeAmounts,
                             backgroundColor: typeColors,
-                            borderWidth: 2,
-                            borderColor: '#ffffff'
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        plugins: {
-                            legend: {
-                                position: 'bottom',
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        const label = context.label || '';
-                                        const value = context.parsed || 0;
-                                        return label + ': ₹' + value.toLocaleString('en-IN');
-                                    }
-                                }
-                            }
-                        }
+            borderWidth: 2,
+            borderColor: '#ffffff'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: {
+                position: 'bottom',
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const label = context.label || '';
+                        const value = context.parsed || 0;
+                        return label + ': ₹' + value.toLocaleString('en-IN');
                     }
-                });
+                }
+            }
+        }
+    }
+});
             }
         } catch (e) {
             console.error('Error creating type chart:', e);
@@ -216,7 +216,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     {% if has_client_data %}
-    // Top Clients Chart
+// Top Clients Chart
     const clientCtx = document.getElementById('clientChart');
     if (clientCtx && typeof Chart !== 'undefined') {
         try {
@@ -225,51 +225,51 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (clientLabels && clientLabels.length > 0) {
                 new Chart(clientCtx.getContext('2d'), {
-                    type: 'bar',
-                    data: {
+    type: 'bar',
+    data: {
                         labels: clientLabels,
-                        datasets: [{
-                            label: 'Profit',
+        datasets: [{
+            label: 'Profit',
                             data: clientProfits,
-                            backgroundColor: 'rgba(20, 184, 166, 0.7)',
-                            borderColor: '#14b8a6',
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        indexAxis: 'y',
-                        plugins: {
-                            legend: {
-                                display: false
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        return '₹' + context.parsed.x.toLocaleString('en-IN');
-                                    }
-                                }
-                            }
-                        },
-                        scales: {
-                            x: {
-                                beginAtZero: true,
-                                ticks: {
-                                    callback: function(value) {
-                                        return '₹' + value.toLocaleString('en-IN');
-                                    }
-                                }
-                            }
-                        }
+            backgroundColor: 'rgba(20, 184, 166, 0.7)',
+            borderColor: '#14b8a6',
+            borderWidth: 1
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        indexAxis: 'y',
+        plugins: {
+            legend: {
+                display: false
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return '₹' + context.parsed.x.toLocaleString('en-IN');
                     }
-                });
+                }
+            }
+        },
+        scales: {
+            x: {
+                beginAtZero: true,
+                ticks: {
+                    callback: function(value) {
+                        return '₹' + value.toLocaleString('en-IN');
+                    }
+                }
+            }
+        }
+    }
+});
             }
         } catch (e) {
             console.error('Error creating client chart:', e);
         }
     }
-    {% endif %}
+{% endif %}
 });
 </script>
 {% endif %}

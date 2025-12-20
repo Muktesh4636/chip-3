@@ -9,33 +9,33 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
 <!-- Time Travel Section -->
-<div style="background: var(--bg-content); border-radius: 8px; padding: 20px; border: 1px solid var(--border); margin-bottom: 24px;">
+<div style="background: var(--bg-content); border-radius: 8px; padding: 16px; border: 1px solid var(--border); margin-bottom: 24px; opacity: 0.7;">
     <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
         <div>
-            <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 8px 0;">Time Travel Report</h2>
-            <p style="margin: 0; font-size: 14px; color: var(--muted);">View historical data for any date range</p>
+            <h2 style="font-size: 16px; font-weight: 400; margin: 0 0 4px 0; color: var(--muted);">Time Travel Report</h2>
+            <p style="margin: 0; font-size: 12px; color: var(--muted);">View historical data for any date range</p>
         </div>
         <form method="get" style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
             <input type="hidden" name="report_type" value="{{ report_type }}">
             <div>
-                <label class="field-label" style="margin: 0 0 4px 0;">Start Date</label>
-                <input type="date" name="start_date" value="{{ start_date_str|default:'' }}" class="field-input" style="min-width: 150px;">
+                <label class="field-label" style="margin: 0 0 4px 0; font-size: 13px;">Start Date</label>
+                <input type="date" name="start_date" value="{{ start_date_str|default:'' }}" class="field-input" style="min-width: 150px; font-size: 14px;">
             </div>
             <div>
-                <label class="field-label" style="margin: 0 0 4px 0;">End Date</label>
-                <input type="date" name="end_date" value="{{ end_date_str|default:'' }}" class="field-input" style="min-width: 150px;">
+                <label class="field-label" style="margin: 0 0 4px 0; font-size: 13px;">End Date</label>
+                <input type="date" name="end_date" value="{{ end_date_str|default:'' }}" class="field-input" style="min-width: 150px; font-size: 14px;">
             </div>
             <div style="display: flex; gap: 8px;">
-                <button type="submit" class="btn btn-primary">View Report</button>
+                <button type="submit" class="btn {% if time_travel_mode %}btn-primary{% endif %}" style="{% if time_travel_mode %}background: var(--accent); color: white;{% else %}background: #3b82f6; color: white;{% endif %} font-size: 14px;">View Report</button>
                 {% if time_travel_mode %}
-                <a href="?report_type={{ report_type }}" class="btn">Clear</a>
+                <a href="?report_type={{ report_type }}" class="btn" style="font-size: 14px;">Clear</a>
                 {% endif %}
             </div>
         </form>
     </div>
     {% if time_travel_mode %}
-    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
-        <div style="font-size: 14px; color: var(--muted);">
+    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
+        <div style="font-size: 13px; color: var(--muted);">
             {% if start_date_str and end_date_str %}
                 Showing data from <strong>{{ start_date_str }}</strong> to <strong>{{ end_date_str }}</strong>
             {% elif as_of_str %}
@@ -49,13 +49,13 @@
 <!-- Report Type Tabs -->
 <div style="background: var(--bg-content); border-radius: 8px; padding: 0; border: 1px solid var(--border); margin-bottom: 24px; overflow: hidden;">
     <div style="display: flex; border-bottom: 1px solid var(--border);">
-        <a href="?report_type=daily" style="flex: 1; padding: 16px 20px; text-align: center; text-decoration: none; color: var(--text); border-right: 1px solid var(--border); background: {% if report_type == 'daily' %}#f9fafb{% else %}transparent{% endif %}; font-weight: {% if report_type == 'daily' %}600{% else %}400{% endif %}; font-size: 15px; {% if report_type == 'daily' %}border-bottom: 2px solid var(--accent); margin-bottom: -1px;{% endif %}">
+        <a href="?report_type=daily" onclick="return changeReportType('daily', event)" style="flex: 1; padding: 16px 20px; text-align: center; text-decoration: none; color: var(--text); border-right: 1px solid var(--border); background: {% if report_type == 'daily' %}#f9fafb{% else %}transparent{% endif %}; font-weight: {% if report_type == 'daily' %}600{% else %}400{% endif %}; font-size: 15px; {% if report_type == 'daily' %}border-bottom: 2px solid var(--accent); margin-bottom: -1px;{% endif %}">
             Daily Report
         </a>
-        <a href="?report_type=weekly" style="flex: 1; padding: 16px 20px; text-align: center; text-decoration: none; color: var(--text); border-right: 1px solid var(--border); background: {% if report_type == 'weekly' %}#f9fafb{% else %}transparent{% endif %}; font-weight: {% if report_type == 'weekly' %}600{% else %}400{% endif %}; font-size: 15px; {% if report_type == 'weekly' %}border-bottom: 2px solid var(--accent); margin-bottom: -1px;{% endif %}">
+        <a href="?report_type=weekly" onclick="return changeReportType('weekly', event)" style="flex: 1; padding: 16px 20px; text-align: center; text-decoration: none; color: var(--text); border-right: 1px solid var(--border); background: {% if report_type == 'weekly' %}#f9fafb{% else %}transparent{% endif %}; font-weight: {% if report_type == 'weekly' %}600{% else %}400{% endif %}; font-size: 15px; {% if report_type == 'weekly' %}border-bottom: 2px solid var(--accent); margin-bottom: -1px;{% endif %}">
             Weekly Report
         </a>
-        <a href="?report_type=monthly" style="flex: 1; padding: 16px 20px; text-align: center; text-decoration: none; color: var(--text); background: {% if report_type == 'monthly' %}#f9fafb{% else %}transparent{% endif %}; font-weight: {% if report_type == 'monthly' %}600{% else %}400{% endif %}; font-size: 15px; {% if report_type == 'monthly' %}border-bottom: 2px solid var(--accent); margin-bottom: -1px;{% endif %}">
+        <a href="?report_type=monthly" onclick="return changeReportType('monthly', event)" style="flex: 1; padding: 16px 20px; text-align: center; text-decoration: none; color: var(--text); background: {% if report_type == 'monthly' %}#f9fafb{% else %}transparent{% endif %}; font-weight: {% if report_type == 'monthly' %}600{% else %}400{% endif %}; font-size: 15px; {% if report_type == 'monthly' %}border-bottom: 2px solid var(--accent); margin-bottom: -1px;{% endif %}">
             Monthly Report
         </a>
     </div>
@@ -217,6 +217,55 @@
 {% endif %}
 
 <script>
+// Disable automatic scroll restoration
+if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+}
+
+// Preserve scroll position when changing report type
+function changeReportType(type, event) {
+    event.preventDefault();
+    const currentScrollY = window.scrollY || window.pageYOffset;
+    const url = new URL(window.location);
+    
+    // Preserve time travel parameters if they exist
+    const startDate = url.searchParams.get('start_date');
+    const endDate = url.searchParams.get('end_date');
+    const dateParam = url.searchParams.get('date');
+    
+    // Build new URL
+    url.searchParams.set('report_type', type);
+    if (startDate) url.searchParams.set('start_date', startDate);
+    if (endDate) url.searchParams.set('end_date', endDate);
+    if (dateParam) url.searchParams.set('date', dateParam);
+    
+    // Store scroll position to restore after page load
+    sessionStorage.setItem('reportScrollPosition', currentScrollY);
+    window.location.href = url.toString();
+    return false;
+}
+
+// Restore scroll position immediately on page load
+(function() {
+    const savedScroll = sessionStorage.getItem('reportScrollPosition');
+    if (savedScroll !== null) {
+        const scrollPos = parseInt(savedScroll);
+        // Restore immediately
+        window.scrollTo(0, scrollPos);
+        sessionStorage.removeItem('reportScrollPosition');
+        
+        // Also restore after DOM is ready and after a short delay
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                window.scrollTo(0, scrollPos);
+            });
+        }
+        setTimeout(function() {
+            window.scrollTo(0, scrollPos);
+        }, 100);
+    }
+})();
+
 // Daily Trends Chart
 {% if report_type == 'daily' or report_type == 'weekly' %}
 const dailyCtx = document.getElementById('dailyTrendsChart').getContext('2d');
