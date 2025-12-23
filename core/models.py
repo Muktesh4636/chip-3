@@ -94,12 +94,14 @@ class Transaction(TimeStampedModel):
     TYPE_PROFIT = "PROFIT"
     TYPE_LOSS = "LOSS"
     TYPE_SETTLEMENT = "SETTLEMENT"
+    TYPE_BALANCE_RECORD = "BALANCE_RECORD"
 
     TRANSACTION_TYPES = [
         (TYPE_FUNDING, "Funding (You give money to client)"),
         (TYPE_PROFIT, "Profit"),
         (TYPE_LOSS, "Loss"),
         (TYPE_SETTLEMENT, "Settlement / Payout"),
+        (TYPE_BALANCE_RECORD, "Balance Record"),
     ]
 
     client_exchange = models.ForeignKey("ClientExchange", related_name="transactions", on_delete=models.CASCADE)

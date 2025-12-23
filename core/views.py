@@ -1,10 +1,10 @@
 from datetime import date, datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import json
 
 from django.contrib.auth import logout, login, authenticate
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q, Sum, Count
+from django.db.models import Q, Sum, Count, F
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -573,7 +573,7 @@ def client_give_money(request, client_pk):
     if request.method == "POST":
         client_exchange_id = request.POST.get("client_exchange")
         tx_date = request.POST.get("date")
-        amount = Decimal(request.POST.get("amount", 0))
+        amount = Decimal(request.POST.get("amount", 0) or 0).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
         note = request.POST.get("note", "")
         
         if client_exchange_id and tx_date and amount > 0:
@@ -636,7 +636,7 @@ def settle_payment(request):
     if request.method == "POST":
         client_id = request.POST.get("client_id")
         client_exchange_id = request.POST.get("client_exchange_id")
-        amount = Decimal(request.POST.get("amount", 0))
+        amount = Decimal(request.POST.get("amount", 0) or 0).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
         tx_date = request.POST.get("date")
         note = request.POST.get("note", "")
         payment_type = request.POST.get("payment_type", "client_pays")  # client_pays or admin_pays_profit
@@ -649,6 +649,7 @@ def settle_payment(request):
         
         # Debug logging
         print(f"settle_payment POST data: client_id={client_id}, client_exchange_id={client_exchange_id}, amount={amount}, tx_date={tx_date}, payment_type={payment_type}")
+        print(f"All POST data: {dict(request.POST)}")
         
         if client_id and client_exchange_id and amount > 0 and tx_date:
             try:
@@ -693,6 +694,9 @@ def settle_payment(request):
                     return redirect(reverse("pending:summary") + redirect_url)
                 elif payment_type == "admin_pays_profit":
                     # Admin pays client profit - doesn't affect pending or exchange balance
+                    # Round amount to 1 decimal place
+                    amount = amount.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+                    
                     # Create SETTLEMENT transaction where admin pays client
                     transaction = Transaction.objects.create(
                         client_exchange=client_exchange,
@@ -838,7 +842,13 @@ def transaction_list(request):
     if end_date_str:
         transactions = transactions.filter(date__lte=date.fromisoformat(end_date_str))
     if tx_type:
-        transactions = transactions.filter(transaction_type=tx_type)
+        if tx_type == "RECORDED_BALANCE":
+            # Filter transactions that have a recorded balance for the same date and client_exchange
+            transactions = transactions.filter(
+                client_exchange__daily_balances__date=F('date')
+            ).distinct()
+        else:
+            transactions = transactions.filter(transaction_type=tx_type)
     if search_query:
         transactions = transactions.filter(
             Q(client_exchange__client__name__icontains=search_query) |
@@ -883,6 +893,7 @@ def transaction_list(request):
         "selected_type": tx_type,
         "search_query": search_query,
         "client_type": client_type,
+        "client_type_filter": client_type,  # For template conditional display
     })
 
 
@@ -1001,6 +1012,9 @@ def pending_summary(request):
                 
                 client_profit_shares = client_profit_loss * client_share_pct / Decimal(100)
             
+            # Round client_profit_shares to 1 decimal place
+            client_profit_shares = client_profit_shares.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+            
             # Get settlements where admin paid client (client receives, admin pays)
             settlement_transactions = Transaction.objects.filter(
                 client_exchange=client_exchange,
@@ -1010,8 +1024,13 @@ def pending_summary(request):
             )
             settlements_paid = settlement_transactions.aggregate(total=Sum("client_share_amount"))["total"] or Decimal(0)
             
+            # Round to 1 decimal place to match display format
+            settlements_paid = settlements_paid.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+            client_profit_shares = client_profit_shares.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+            
             # Unpaid profit = client profit shares - settlements already paid
             unpaid_profit = max(Decimal(0), client_profit_shares - settlements_paid)
+            unpaid_profit = unpaid_profit.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
             
             # Calculate admin's share (my share) from total profit
             my_share_pct = client_exchange.my_share_pct
@@ -2763,6 +2782,25 @@ def client_balance(request, client_pk):
                 # Calculate new balance
                 new_balance = remaining_balance + extra_adjustment
                 
+                # Always create a new transaction for this balance record update
+                # Each update creates a separate transaction entry (no updates to existing transactions)
+                from datetime import datetime
+                balance_note = note or f"Balance Record: ₹{remaining_balance}"
+                if extra_adjustment:
+                    balance_note += f" + Adjustment: ₹{extra_adjustment}"
+                balance_note += f" (Updated at {datetime.now().strftime('%H:%M:%S')})"
+                
+                Transaction.objects.create(
+                    client_exchange=client_exchange,
+                    date=date.fromisoformat(balance_date),
+                    transaction_type=Transaction.TYPE_BALANCE_RECORD,
+                    amount=new_balance,
+                    client_share_amount=new_balance,
+                    your_share_amount=Decimal(0),
+                    company_share_amount=Decimal(0),
+                    note=balance_note,
+                )
+                
                 # Update pending if balance decreased
                 if new_balance < old_balance:
                     update_pending_from_balance_change(client_exchange, old_balance, new_balance)
@@ -2777,6 +2815,25 @@ def client_balance(request, client_pk):
                         "extra_adjustment": extra_adjustment,
                         "note": note,
                     }
+                )
+                
+                # Always create a new transaction for this balance record
+                # Each recording creates a separate transaction entry (no updates to existing transactions)
+                from datetime import datetime
+                balance_note = note or f"Balance Record: ₹{remaining_balance}"
+                if extra_adjustment:
+                    balance_note += f" + Adjustment: ₹{extra_adjustment}"
+                balance_note += f" (Recorded at {datetime.now().strftime('%H:%M:%S')})"
+                
+                Transaction.objects.create(
+                    client_exchange=client_exchange,
+                    date=date.fromisoformat(balance_date),
+                    transaction_type=Transaction.TYPE_BALANCE_RECORD,
+                    amount=new_balance,
+                    client_share_amount=new_balance,
+                    your_share_amount=Decimal(0),
+                    company_share_amount=Decimal(0),
+                    note=balance_note,
                 )
                 
                 # Update pending if balance decreased from previous
@@ -2929,14 +2986,42 @@ def client_balance(request, client_pk):
     # Annotate transactions with recorded balances for their dates
     transactions_with_balances = []
     for tx in all_transactions:
-        # Get the recorded balance for this transaction's date and client_exchange
-        recorded_balance = ClientDailyBalance.objects.filter(
-            client_exchange=tx.client_exchange,
-            date=tx.date
-        ).first()
+        # For balance record transactions, the transaction amount IS the recorded balance
+        if tx.transaction_type == Transaction.TYPE_BALANCE_RECORD:
+            # Create a mock balance object with the transaction amount
+            class MockBalance:
+                def __init__(self, amount):
+                    self.remaining_balance = amount
+                    self.extra_adjustment = Decimal(0)
+            tx.recorded_balance = MockBalance(tx.amount)
+        else:
+            # For other transactions, find the balance record created closest to (but before or at) this transaction's time
+            # First, try to find balance records on the same date, created before or at this transaction's time
+            recorded_balance = ClientDailyBalance.objects.filter(
+                client_exchange=tx.client_exchange,
+                date=tx.date,
+                created_at__lte=tx.created_at
+            ).order_by('-created_at').first()
+            
+            # If no balance on same date before this transaction, get the most recent balance before this date
+            if not recorded_balance:
+                recorded_balance = ClientDailyBalance.objects.filter(
+                    client_exchange=tx.client_exchange,
+                    date__lt=tx.date
+                ).order_by('-date', '-created_at').first()
+            
+            # If still no balance record found, calculate from transactions
+            if not recorded_balance:
+                # Calculate balance from transactions up to this point
+                balance_amount = get_exchange_balance(tx.client_exchange, as_of_date=tx.date)
+                class MockBalance:
+                    def __init__(self, amount):
+                        self.remaining_balance = amount
+                        self.extra_adjustment = Decimal(0)
+                tx.recorded_balance = MockBalance(balance_amount)
+            else:
+                tx.recorded_balance = recorded_balance
         
-        # Create a dict-like object or add attribute to transaction
-        tx.recorded_balance = recorded_balance
         transactions_with_balances.append(tx)
     
     all_transactions = transactions_with_balances

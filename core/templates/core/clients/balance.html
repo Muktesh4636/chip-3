@@ -66,7 +66,7 @@
         
         <div style="margin-bottom: 16px;">
             <label class="field-label">Remaining Balance (₹) *</label>
-            <input type="number" name="remaining_balance" id="balance-amount" class="field-input" step="0.01" min="0" value="{% if edit_balance %}{{ edit_balance.remaining_balance }}{% endif %}" required placeholder="0.00" style="max-width: 300px;">
+            <input type="number" name="remaining_balance" id="balance-amount" class="field-input" step="0.1" min="0" value="{% if edit_balance %}{{ edit_balance.remaining_balance }}{% endif %}" required placeholder="0.0" style="max-width: 300px;">
             <div id="calculated-balance-hint" style="display: none; font-size: 12px; color: var(--accent); margin-top: 6px; font-weight: 500;"></div>
         </div>
         
@@ -92,10 +92,10 @@
         <div><strong>{{ balance.exchange.name }}</strong>{% if balance.exchange.code %} ({{ balance.exchange.code }}){% endif %} - Balance Summary</div>
         <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
             <div style="font-size: 20px; font-weight: 600; color: var(--accent);">
-                Current Balance: ₹ {{ balance.total_balance_in_exchange|floatformat:2 }}
+                Current Balance: ₹ {{ balance.total_balance_in_exchange|floatformat:1 }}
             </div>
             {% if all_transactions %}
-            <a href="#transactions-section" class="btn btn-primary" style="white-space: nowrap; text-decoration: none;">
+            <a href="{% url 'transactions:list' %}?client={{ client.pk }}&exchange={{ balance.exchange.pk }}{% if client_type == 'company' %}&client_type=company{% elif client_type == 'my' %}&client_type=my{% endif %}" class="btn btn-primary" style="white-space: nowrap; text-decoration: none;">
                 View All Transactions ({{ all_transactions|length }})
             </a>
             {% endif %}
@@ -112,26 +112,26 @@
         {% if client_type == 'company' %}
         <tr>
             <td><strong>My Percentage</strong></td>
-            <td><strong style="font-size: 16px; color: var(--accent);">{{ balance.my_share_pct|floatformat:2 }}%</strong></td>
+            <td><strong style="font-size: 16px; color: var(--accent);">{{ balance.my_share_pct|floatformat:1 }}%</strong></td>
         </tr>
         <tr>
             <td><strong>Company Percentage</strong></td>
-            <td><strong style="font-size: 16px; color: var(--accent);">{{ balance.company_share_pct|floatformat:2 }}%</strong></td>
+            <td><strong style="font-size: 16px; color: var(--accent);">{{ balance.company_share_pct|floatformat:1 }}%</strong></td>
         </tr>
         {% endif %}
         <tr>
             <td><strong>Total Turnover</strong></td>
-            <td><strong style="font-size: 18px; color: var(--accent);">₹ {{ balance.total_turnover|floatformat:2 }}</strong></td>
+            <td><strong style="font-size: 18px; color: var(--accent);">₹ {{ balance.total_turnover|floatformat:1 }}</strong></td>
         </tr>
         <tr>
             <td><strong>Current Exchange Balance</strong></td>
-            <td><strong style="font-size: 18px; color: var(--accent);">₹ {{ balance.total_balance_in_exchange|floatformat:2 }}</strong></td>
+            <td><strong style="font-size: 18px; color: var(--accent);">₹ {{ balance.total_balance_in_exchange|floatformat:1 }}</strong></td>
         </tr>
         <tr style="border-top: 2px solid var(--border);">
             <td><strong>Client Profit/Loss</strong></td>
             <td>
                 <strong style="color: {% if balance.is_profit %}var(--success){% else %}var(--danger){% endif %}; font-size: 18px;">
-                    {% if balance.is_profit %}+{% endif %}₹ {{ balance.client_profit_loss|floatformat:2 }}
+                    {% if balance.is_profit %}+{% endif %}₹ {{ balance.client_profit_loss|floatformat:1 }}
                 </strong>
                 <span style="color: {% if balance.is_profit %}var(--success){% else %}var(--danger){% endif %}; margin-left: 8px;">
                     {% if balance.is_profit %}(Profit){% else %}(Loss){% endif %}
@@ -140,63 +140,31 @@
         </tr>
         {% if balance.is_profit %}
         <tr>
-            <td>You Pay to Client</td>
-            <td style="color: var(--danger);"><strong>₹ {{ balance.client_profit|default:balance.client_profit_loss|floatformat:2 }}</strong></td>
+            <td>Amount Payable to Client</td>
+            <td style="color: var(--danger);"><strong>₹ {{ balance.client_profit|default:balance.client_profit_loss|floatformat:1 }}</strong></td>
         </tr>
         {% else %}
         <tr>
-            <td>You Earn from Client</td>
-            <td style="color: var(--success);"><strong>₹ {{ balance.admin_earns|default:balance.admin_profit|floatformat:2 }}</strong></td>
+            <td>Amount Receivable from Client</td>
+            <td style="color: var(--success);"><strong>₹ {{ balance.admin_earns|default:balance.admin_profit|floatformat:1 }}</strong></td>
         </tr>
         {% if client_type == 'company' %}
         <tr>
             <td>Company Earns</td>
-            <td>₹ {{ balance.company_earns|default:balance.company_share_profit|floatformat:2 }}</td>
+            <td>₹ {{ balance.company_earns|default:balance.company_share_profit|floatformat:1 }}</td>
         </tr>
         {% endif %}
         {% endif %}
         {% if balance.pending_amount != 0 %}
         <tr style="border-top: 2px solid var(--border); background: rgba(239, 68, 68, 0.05);">
             <td><strong>Unpaid Amount (Pending)</strong></td>
-            <td><strong style="color: var(--danger); font-size: 18px;">₹ {{ balance.pending_amount|floatformat:2 }}</strong></td>
+            <td><strong style="color: var(--danger); font-size: 18px;">₹ {{ balance.pending_amount|floatformat:1 }}</strong></td>
         </tr>
         {% endif %}
         </tbody>
     </table>
 </div>
 
-<!-- Daily Balance History -->
-{% if client_type == 'company' and balance.daily_balances %}
-<div class="table-wrapper" style="margin-bottom: 24px;">
-    <div class="table-header">
-        <div>Daily Balance Records (Last 10)</div>
-    </div>
-    <table>
-        <thead>
-        <tr>
-            <th>Date</th>
-            <th>Remaining Balance</th>
-            <th>Extra Adjustment</th>
-            <th>Note</th>
-            <th>Actions</th>
-        </tr>
-        </thead>
-        <tbody>
-        {% for daily_balance in balance.daily_balances|slice:":10" %}
-        <tr>
-            <td>{{ daily_balance.date|date:"M d, Y" }}</td>
-            <td><strong style="color: var(--accent);">₹ {{ daily_balance.remaining_balance|floatformat:2 }}</strong></td>
-            <td>{% if daily_balance.extra_adjustment %}<span style="color: var(--success);">+ ₹ {{ daily_balance.extra_adjustment|floatformat:2 }}</span>{% else %}—{% endif %}</td>
-            <td>{{ daily_balance.note }}</td>
-            <td>
-                <a href="?edit_balance={{ daily_balance.pk }}{% if selected_exchange_id %}&exchange={{ selected_exchange_id }}{% endif %}" class="btn btn-sm">Edit</a>
-            </td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endif %}
 {% endfor %}
 
 {% if exchange_balances|length == 0 %}
@@ -212,7 +180,7 @@
 <div id="transactions-section" style="background: var(--bg-content); border-radius: 8px; padding: 0; border: 1px solid var(--border); margin-bottom: 24px; overflow: hidden; scroll-margin-top: 20px;">
     <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); background: var(--bg-content);">
         <h2 style="font-size: 18px; font-weight: 600; margin: 0;">
-            All Transactions
+            Last 3 Transactions
             {% if selected_exchange_name %}
                 - {{ selected_exchange_name }}
             {% endif %}
@@ -236,11 +204,10 @@
                     {% endif %}
                     <th>Recorded Balance</th>
                     <th>Note</th>
-                    <th>Actions</th>
                 </tr>
                 </thead>
                 <tbody>
-                {% for tx in all_transactions %}
+                {% for tx in all_transactions|slice:":3" %}
                     <tr>
                         <td><strong>{{ tx.date|date:"M d, Y" }}</strong></td>
                         {% if not selected_exchange_id %}
@@ -257,26 +224,23 @@
                                 <span class="badge badge-muted">{{ tx.get_transaction_type_display }}</span>
                             {% endif %}
                         </td>
-                        <td><strong>₹ {{ tx.amount|floatformat:2 }}</strong></td>
-                        <td>₹ {{ tx.your_share_amount|floatformat:2 }}</td>
-                        <td>₹ {{ tx.client_share_amount|floatformat:2 }}</td>
+                        <td><strong>₹ {{ tx.amount|floatformat:1 }}</strong></td>
+                        <td>₹ {{ tx.your_share_amount|floatformat:1 }}</td>
+                        <td>₹ {{ tx.client_share_amount|floatformat:1 }}</td>
                         {% if client_type == 'company' %}
-                        <td>₹ {{ tx.company_share_amount|floatformat:2 }}</td>
+                        <td>₹ {{ tx.company_share_amount|floatformat:1 }}</td>
                         {% endif %}
                         <td>
                             {% if tx.recorded_balance %}
-                                <strong style="color: var(--accent);">₹ {{ tx.recorded_balance.remaining_balance|floatformat:2 }}</strong>
+                                <strong style="color: var(--accent);">₹ {{ tx.recorded_balance.remaining_balance|floatformat:1 }}</strong></td>
                                 {% if tx.recorded_balance.extra_adjustment %}
-                                    <span style="color: var(--success); font-size: 12px;">(+ ₹ {{ tx.recorded_balance.extra_adjustment|floatformat:2 }})</span>
+                                    <span style="color: var(--success); font-size: 12px;">(+ ₹ {{ tx.recorded_balance.extra_adjustment|floatformat:1 }})</span>
                                 {% endif %}
                             {% else %}
                                 <span style="color: var(--muted);">—</span>
                             {% endif %}
                         </td>
                         <td style="color: var(--muted); font-size: 13px;">{{ tx.note|default:"—"|truncatewords:10 }}</td>
-                        <td>
-                            <a href="{% url 'transactions:detail' tx.pk %}" class="btn btn-sm">View Details</a>
-                        </td>
                     </tr>
                 {% endfor %}
                 </tbody>
@@ -333,10 +297,10 @@ function loadExchangeBalanceData(clientExchangeId) {
                 
                 // Show calculated balance hint
                 if (data.has_recorded_balance && data.calculated_balance !== data.remaining_balance) {
-                    hintDiv.textContent = `Calculated balance: ₹ ${parseFloat(data.calculated_balance).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    hintDiv.textContent = `Calculated balance: ₹ ${parseFloat(data.calculated_balance).toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1})}`;
                     hintDiv.style.display = 'block';
                 } else if (!data.has_recorded_balance) {
-                    hintDiv.textContent = `Calculated balance: ₹ ${parseFloat(data.calculated_balance).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    hintDiv.textContent = `Calculated balance: ₹ ${parseFloat(data.calculated_balance).toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1})}`;
                     hintDiv.style.display = 'block';
                 } else {
                     hintDiv.style.display = 'none';
@@ -344,7 +308,7 @@ function loadExchangeBalanceData(clientExchangeId) {
                 
                 // Show funding hint
                 if (data.total_funding && parseFloat(data.total_funding) > 0) {
-                    fundingHintDiv.textContent = `Funding: +₹${parseFloat(data.total_funding).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    fundingHintDiv.textContent = `Funding: +₹${parseFloat(data.total_funding).toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1})}`;
                     fundingHintDiv.style.display = 'block';
                 } else {
                     fundingHintDiv.style.display = 'none';

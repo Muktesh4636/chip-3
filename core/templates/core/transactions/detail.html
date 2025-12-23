@@ -49,20 +49,20 @@
         </tr>
         <tr>
             <td><strong>Amount</strong></td>
-            <td><strong style="font-size: 18px; color: var(--accent);">₹ {{ transaction.amount|floatformat:2 }}</strong></td>
+            <td><strong style="font-size: 18px; color: var(--accent);">₹ {{ transaction.amount|floatformat:1 }}</strong></td>
         </tr>
         <tr>
-            <td><strong>Your Share</strong></td>
-            <td>₹ {{ transaction.your_share_amount|floatformat:2 }}</td>
+            <td><strong>Your Share</strong>{% if client_exchange.my_share_pct %} ({{ client_exchange.my_share_pct }}%){% endif %}</td>
+            <td>₹ {{ calculated_your_share|floatformat:1 }}</td>
         </tr>
         <tr>
             <td><strong>Client Share</strong></td>
-            <td>₹ {{ transaction.client_share_amount|floatformat:2 }}</td>
+            <td>₹ {{ calculated_client_share|floatformat:1 }}</td>
         </tr>
         {% if client_type == 'company' %}
         <tr>
-            <td><strong>Company Share</strong></td>
-            <td>₹ {{ transaction.company_share_amount|floatformat:2 }}</td>
+            <td><strong>Company Share</strong>{% if client_exchange.company_share_pct %} ({{ client_exchange.company_share_pct }}% of client's share){% endif %}</td>
+            <td>₹ {{ calculated_company_share|floatformat:1 }}</td>
         </tr>
         {% endif %}
         <tr>
@@ -82,27 +82,27 @@
         <tbody>
         <tr>
             <td><strong>Exchange Balance</strong></td>
-            <td><strong style="font-size: 18px; color: var(--accent);">₹ {{ balance_before|floatformat:2 }}</strong></td>
+            <td><strong style="font-size: 18px; color: var(--accent);">₹ {{ balance_before|floatformat:1 }}</strong></td>
         </tr>
         <tr>
             <td>Total Funding</td>
-            <td>₹ {{ funding_before|floatformat:2 }}</td>
+            <td>₹ {{ funding_before|floatformat:1 }}</td>
         </tr>
         <tr>
             <td>Total Profit</td>
-            <td style="color: var(--success);">₹ {{ profit_before|floatformat:2 }}</td>
+            <td style="color: var(--success);">₹ {{ profit_before|floatformat:1 }}</td>
         </tr>
         <tr>
             <td>Total Loss</td>
-            <td style="color: var(--danger);">₹ {{ loss_before|floatformat:2 }}</td>
+            <td style="color: var(--danger);">₹ {{ loss_before|floatformat:1 }}</td>
         </tr>
         <tr>
             <td><strong>Client Net Balance</strong></td>
-            <td><strong style="color: {% if client_net_before >= 0 %}var(--success){% else %}var(--danger){% endif %};">₹ {{ client_net_before|floatformat:2 }}</strong></td>
+            <td><strong style="color: {% if client_net_before >= 0 %}var(--success){% else %}var(--danger){% endif %};">₹ {{ client_net_before|floatformat:1 }}</strong></td>
         </tr>
         <tr>
             <td><strong>Pending Amount</strong></td>
-            <td><strong style="color: var(--danger);">₹ {{ pending_before|floatformat:2 }}</strong></td>
+            <td><strong style="color: var(--danger);">₹ {{ pending_before|floatformat:1 }}</strong></td>
         </tr>
         </tbody>
     </table>
@@ -117,27 +117,27 @@
         <tbody>
         <tr>
             <td><strong>Exchange Balance</strong></td>
-            <td><strong style="font-size: 18px; color: var(--accent);">₹ {{ balance_after|floatformat:2 }}</strong></td>
+            <td><strong style="font-size: 18px; color: var(--accent);">₹ {{ balance_after|floatformat:1 }}</strong></td>
         </tr>
         <tr>
             <td>Total Funding</td>
-            <td>₹ {{ funding_after|floatformat:2 }}</td>
+            <td>₹ {{ funding_after|floatformat:1 }}</td>
         </tr>
         <tr>
             <td>Total Profit</td>
-            <td style="color: var(--success);">₹ {{ profit_after|floatformat:2 }}</td>
+            <td style="color: var(--success);">₹ {{ profit_after|floatformat:1 }}</td>
         </tr>
         <tr>
             <td>Total Loss</td>
-            <td style="color: var(--danger);">₹ {{ loss_after|floatformat:2 }}</td>
+            <td style="color: var(--danger);">₹ {{ loss_after|floatformat:1 }}</td>
         </tr>
         <tr>
             <td><strong>Client Net Balance</strong></td>
-            <td><strong style="color: {% if client_net_after >= 0 %}var(--success){% else %}var(--danger){% endif %};">₹ {{ client_net_after|floatformat:2 }}</strong></td>
+            <td><strong style="color: {% if client_net_after >= 0 %}var(--success){% else %}var(--danger){% endif %};">₹ {{ client_net_after|floatformat:1 }}</strong></td>
         </tr>
         <tr>
             <td><strong>Pending Amount</strong></td>
-            <td><strong style="color: var(--danger);">₹ {{ pending_after|floatformat:2 }}</strong></td>
+            <td><strong style="color: var(--danger);">₹ {{ pending_after|floatformat:1 }}</strong></td>
         </tr>
         </tbody>
     </table>
@@ -154,7 +154,7 @@
             <td><strong>Exchange Balance Change</strong></td>
             <td>
                 <strong style="font-size: 18px; color: {% if balance_change >= 0 %}var(--success){% else %}var(--danger){% endif %};">
-                    {% if balance_change >= 0 %}+{% endif %}₹ {{ balance_change|floatformat:2 }}
+                    {% if balance_change >= 0 %}+{% endif %}₹ {{ balance_change|floatformat:1 }}
                 </strong>
             </td>
         </tr>
@@ -162,7 +162,7 @@
             <td><strong>Client Net Balance Change</strong></td>
             <td>
                 <strong style="color: {% if client_net_change >= 0 %}var(--success){% else %}var(--danger){% endif %};">
-                    {% if client_net_change >= 0 %}+{% endif %}₹ {{ client_net_change|floatformat:2 }}
+                    {% if client_net_change >= 0 %}+{% endif %}₹ {{ client_net_change|floatformat:1 }}
                 </strong>
             </td>
         </tr>
@@ -170,7 +170,7 @@
             <td><strong>Pending Amount Change</strong></td>
             <td>
                 <strong style="color: {% if pending_change >= 0 %}var(--danger){% else %}var(--success){% endif %};">
-                    {% if pending_change >= 0 %}+{% endif %}₹ {{ pending_change|floatformat:2 }}
+                    {% if pending_change >= 0 %}+{% endif %}₹ {{ pending_change|floatformat:1 }}
                 </strong>
             </td>
         </tr>

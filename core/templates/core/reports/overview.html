@@ -225,18 +225,6 @@
     {% endif %}
 </div>
 
-<!-- Client Type Filter Tabs -->
-<div class="tabs-simple" style="margin-bottom: 16px;">
-    <a href="?report_type={{ report_type }}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}{% if selected_client_id %}&client={{ selected_client_id }}{% endif %}" onclick="return changeClientType('', event)" class="tab-simple {% if not client_type_filter %}active{% endif %}">
-        All Clients
-    </a>
-    <a href="?report_type={{ report_type }}&client_type=company{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}{% if selected_client_id %}&client={{ selected_client_id }}{% endif %}" onclick="return changeClientType('company', event)" class="tab-simple {% if client_type_filter == 'company' %}active{% endif %}">
-        Company Clients
-    </a>
-    <a href="?report_type={{ report_type }}&client_type=my{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}{% if selected_client_id %}&client={{ selected_client_id }}{% endif %}" onclick="return changeClientType('my', event)" class="tab-simple {% if client_type_filter == 'my' %}active{% endif %}">
-        My Clients
-    </a>
-</div>
 
 <!-- Client Selector -->
 <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 12px; padding: 16px; background: #f9fafb; border-radius: 6px; border: 1px solid #e5e7eb;">
@@ -272,18 +260,18 @@
 <div class="stats-grid">
     <div class="stat-box">
         <div class="stat-label">Total Turnover</div>
-        <div class="stat-value">₹ {{ total_turnover|default:0|floatformat:2 }}</div>
+        <div class="stat-value">₹ {{ total_turnover|default:0|floatformat:1 }}</div>
         <div class="stat-note">All-time transaction volume</div>
     </div>
     <div class="stat-box">
         <div class="stat-label">Your Total Profit</div>
-        <div class="stat-value">₹ {{ your_total_profit|default:0|floatformat:2 }}</div>
+        <div class="stat-value">₹ {{ your_total_profit|default:0|floatformat:1 }}</div>
         <div class="stat-note">Your share from profits</div>
     </div>
     {% if client_type_filter != 'my' %}
     <div class="stat-box">
         <div class="stat-label">Company Profit</div>
-        <div class="stat-value">₹ {{ company_profit|default:0|floatformat:2 }}</div>
+        <div class="stat-value">₹ {{ company_profit|default:0|floatformat:1 }}</div>
         <div class="stat-note">Company share from transactions</div>
     </div>
     {% endif %}
@@ -545,7 +533,7 @@ if (dailyChartEl) {
                 },
                 callbacks: {
                     label: function(context) {
-                        return context.dataset.label + ': ₹' + context.parsed.y.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                        return context.dataset.label + ': ₹' + context.parsed.y.toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1});
                     }
                 }
             }
@@ -650,7 +638,7 @@ if (weeklyChartEl) {
                 },
                 callbacks: {
                     label: function(context) {
-                        return context.dataset.label + ': ₹' + context.parsed.y.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                        return context.dataset.label + ': ₹' + context.parsed.y.toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1});
                     }
                 }
             }
@@ -730,7 +718,7 @@ if (typeChartEl) {
                         const value = context.parsed || 0;
                         const total = context.dataset.data.reduce((a, b) => a + b, 0);
                         const percentage = ((value / total) * 100).toFixed(1);
-                        return label + ': ₹' + value.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' (' + percentage + '%)';
+                        return label + ': ₹' + value.toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + ' (' + percentage + '%)';
                     }
                 }
             }
@@ -792,7 +780,7 @@ if (monthlyChartEl) {
                 },
                 callbacks: {
                     label: function(context) {
-                        return context.dataset.label + ': ₹' + context.parsed.y.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                        return context.dataset.label + ': ₹' + context.parsed.y.toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1});
                     }
                 }
             }
@@ -865,7 +853,7 @@ if (clientsChartEl) {
                 },
                 callbacks: {
                     label: function(context) {
-                        return '₹' + context.parsed.x.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                        return '₹' + context.parsed.x.toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1});
                     }
                 }
             }

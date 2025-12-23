@@ -40,7 +40,7 @@
     </div>
     <div class="card">
         <div class="card-title">Avg Daily Turnover</div>
-        <div class="card-value">₹ {{ avg_daily_turnover|floatformat:2|default:0 }}</div>
+        <div class="card-value">₹ {{ avg_daily_turnover|floatformat:1|default:0 }}</div>
     </div>
 </div>
 
@@ -54,17 +54,17 @@
         </div>
         <div>
             <div style="font-size: 14px; color: var(--muted); margin-bottom: 4px;">Profit Margin</div>
-            <div style="font-size: 24px; font-weight: 600;">{% if profit_margin %}{{ profit_margin|floatformat:2 }}%{% else %}0%{% endif %}</div>
+            <div style="font-size: 24px; font-weight: 600;">{% if profit_margin %}{{ profit_margin|floatformat:1 }}%{% else %}0%{% endif %}</div>
         </div>
         <div>
             <div style="font-size: 14px; color: var(--muted); margin-bottom: 4px;">Net Profit</div>
             <div style="font-size: 24px; font-weight: 600; color: {% if net_profit >= 0 %}#16a34a{% else %}#dc2626{% endif %};">
-                {% if net_profit >= 0 %}+₹{{ net_profit|floatformat:2 }}{% else %}₹{{ net_profit|floatformat:2 }}{% endif %}
+                {% if net_profit >= 0 %}+₹{{ net_profit|floatformat:1 }}{% else %}₹{{ net_profit|floatformat:1 }}{% endif %}
             </div>
         </div>
         <div>
             <div style="font-size: 14px; color: var(--muted); margin-bottom: 4px;">Average Daily Turnover</div>
-            <div style="font-size: 24px; font-weight: 600;">₹ {{ avg_daily_turnover|floatformat:2|default:0 }}</div>
+            <div style="font-size: 24px; font-weight: 600;">₹ {{ avg_daily_turnover|floatformat:1|default:0 }}</div>
         </div>
     </div>
 </div>

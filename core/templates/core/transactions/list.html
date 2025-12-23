@@ -10,44 +10,9 @@
 
 {% block content %}
 <style>
-    .client-type-tabs {
-        display: flex;
-        gap: 0;
-        border-bottom: 2px solid var(--border);
-        margin-bottom: 24px;
-        background: var(--bg-content);
-        border-radius: 8px 8px 0 0;
-        padding: 0 20px;
-    }
-    .client-type-tab {
-        padding: 12px 20px;
-        background: none;
-        border: none;
-        border-bottom: 3px solid transparent;
-        color: #6b7280;
-        font-size: 15px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        text-decoration: none;
-        display: inline-block;
-    }
-    .client-type-tab:hover {
-        color: var(--accent);
-        background: rgba(0, 0, 0, 0.02);
-    }
-    .client-type-tab.active {
-        color: var(--accent);
-        border-bottom-color: var(--accent);
-    }
 </style>
 
 <div style="background: var(--bg-content); border-radius: 8px; border: 1px solid var(--border); margin-bottom: 24px; overflow: hidden;">
-    <div class="client-type-tabs">
-        <a href="{% url 'transactions:list' %}{% if search_query or selected_client or selected_exchange or selected_type or start_date or end_date %}?{% if search_query %}search={{ search_query|urlencode }}&{% endif %}{% if selected_client %}client={{ selected_client }}&{% endif %}{% if selected_exchange %}exchange={{ selected_exchange }}&{% endif %}{% if selected_type %}type={{ selected_type }}&{% endif %}{% if start_date %}start_date={{ start_date }}&{% endif %}{% if end_date %}end_date={{ end_date }}{% endif %}{% endif %}" class="client-type-tab {% if not client_type %}active{% endif %}" onclick="event.preventDefault(); changeClientType('');">All</a>
-        <a href="{% url 'transactions:list' %}?client_type=my{% if search_query %}&search={{ search_query|urlencode }}{% endif %}{% if selected_client %}&client={{ selected_client }}{% endif %}{% if selected_exchange %}&exchange={{ selected_exchange }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="client-type-tab {% if client_type == 'my' %}active{% endif %}" onclick="event.preventDefault(); changeClientType('my');">My Clients</a>
-        <a href="{% url 'transactions:list' %}?client_type=company{% if search_query %}&search={{ search_query|urlencode }}{% endif %}{% if selected_client %}&client={{ selected_client }}{% endif %}{% if selected_exchange %}&exchange={{ selected_exchange }}{% endif %}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="client-type-tab {% if client_type == 'company' %}active{% endif %}" onclick="event.preventDefault(); changeClientType('company');">Company Clients</a>
-    </div>
     <div style="padding: 20px;">
         <form method="get" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
             <input type="hidden" name="client_type" id="client_type_input" value="{{ client_type }}">
@@ -67,9 +32,9 @@
             <select name="type" class="field-input" style="width: auto;">
                 <option value="">All Types</option>
                 <option value="FUNDING" {% if selected_type == 'FUNDING' %}selected{% endif %}>Funding</option>
-                <option value="PROFIT" {% if selected_type == 'PROFIT' %}selected{% endif %}>Profit</option>
-                <option value="LOSS" {% if selected_type == 'LOSS' %}selected{% endif %}>Loss</option>
-                <option value="SETTLEMENT" {% if selected_type == 'SETTLEMENT' %}selected{% endif %}>Settlement</option>
+                <option value="PROFIT" {% if selected_type == 'PROFIT' %}selected{% endif %}>You Owe Clients</option>
+                <option value="LOSS" {% if selected_type == 'LOSS' %}selected{% endif %}>Clients Owe You</option>
+                <option value="RECORDED_BALANCE" {% if selected_type == 'RECORDED_BALANCE' %}selected{% endif %}>Recorded Balances</option>
             </select>
             <input type="date" name="start_date" value="{{ start_date }}" class="field-input" style="width: auto;" placeholder="Start Date">
             <input type="date" name="end_date" value="{{ end_date }}" class="field-input" style="width: auto;" placeholder="End Date">
@@ -93,8 +58,10 @@
             <th>Exchange</th>
             <th>Type</th>
             <th>Amount</th>
+            {% if client_type_filter != 'company' %}
             <th>Your Share</th>
             <th>Company Share</th>
+            {% endif %}
             <th>Actions</th>
         </tr>
         </thead>
@@ -119,9 +86,11 @@
                         <span class="badge badge-muted">{{ tx.get_transaction_type_display }}</span>
                     {% endif %}
                 </td>
-                <td><strong>₹ {{ tx.amount }}</strong></td>
-                <td>₹ {{ tx.your_share_amount|default:0 }}</td>
-                <td>₹ {{ tx.company_share_amount|default:0 }}</td>
+                <td><strong>₹ {{ tx.amount|floatformat:1 }}</strong></td>
+                {% if client_type_filter != 'company' %}
+                <td>₹ {{ tx.your_share_amount|default:0|floatformat:1 }}</td>
+                <td>₹ {{ tx.company_share_amount|default:0|floatformat:1 }}</td>
+                {% endif %}
                 <td>
                     <a href="{% url 'transactions:detail' tx.pk %}" class="btn btn-sm" style="margin-right: 4px;">View</a>
                     <a href="{% url 'transactions:edit' tx.pk %}" class="btn btn-sm">Edit</a>
@@ -129,7 +98,7 @@
             </tr>
         {% empty %}
             <tr>
-                <td colspan="7">No transactions recorded yet.</td>
+                <td colspan="{% if client_type_filter == 'company' %}5{% else %}7{% endif %}">No transactions recorded yet.</td>
             </tr>
         {% endfor %}
         </tbody>
