@@ -489,7 +489,7 @@
                         <span class="amount-value">₹ {{ item.combined_share|default:0|floatformat:1 }}</span>
                     </td>
                     <td>
-                        <button onclick="showSettlementForm({{ item.client_id }}, {{ item.client_exchange_id }}, '{{ item.client_name|escapejs }}', '{{ item.exchange_name|escapejs }}', {{ item.pending_amount }}, 'client_pays', {{ item.my_share|default:0 }}, {{ item.company_share|default:0 }}, {{ item.combined_share|default:0 }}, {{ item.is_company_client|yesno:"true,false" }})" class="action-button">
+                        <button onclick="console.log('Button clicked!'); showSettlementForm({{ item.client_id }}, {{ item.client_exchange_id }}, '{{ item.client_name|escapejs }}', '{{ item.exchange_name|escapejs }}', {{ item.pending_amount }}, 'client_pays', {{ item.my_share|default:0 }}, {{ item.company_share|default:0 }}, {{ item.combined_share|default:0 }}, {{ item.is_company_client|yesno:"true,false" }})" class="action-button">
                             Record Payment
                         </button>
                     </td>
@@ -564,7 +564,7 @@
                         <span class="amount-value">₹ {{ item.combined_share|default:0|floatformat:1 }}</span>
                     </td>
                     <td>
-                        <button onclick="showSettlementForm({{ item.client_id }}, {{ item.client_exchange_id }}, '{{ item.client_name }}', '{{ item.exchange_name }}', {{ item.client_profit }}, 'admin_pays_profit', 0, 0, 0, {{ item.is_company_client|yesno:"true,false" }})" class="action-button">
+                        <button onclick="showSettlementForm({{ item.client_id }}, {{ item.client_exchange_id }}, '{{ item.client_name|escapejs }}', '{{ item.exchange_name|escapejs }}', {{ item.client_profit }}, 'admin_pays_profit', 0, 0, 0, {{ item.is_company_client|yesno:"true,false" }})" class="action-button">
                             Pay Client
                         </button>
                     </td>
@@ -654,7 +654,11 @@
 </div>
 
 <script>
-    function showSettlementForm(clientId, clientExchangeId, clientName, exchangeName, amount, paymentType, myShare, companyShare, combinedShare, isCompanyClient) {
+    // Make function globally accessible
+    window.showSettlementForm = function(clientId, clientExchangeId, clientName, exchangeName, amount, paymentType, myShare, companyShare, combinedShare, isCompanyClient) {
+        console.log('=== showSettlementForm CALLED ===');
+        console.log('Arguments:', arguments);
+        console.log('All arguments:', {clientId, clientExchangeId, clientName, exchangeName, amount, paymentType, myShare, companyShare, combinedShare, isCompanyClient});
         try {
             console.log('showSettlementForm called with:', {
                 clientId, clientExchangeId, clientName, exchangeName, amount, paymentType, myShare, companyShare, combinedShare, isCompanyClient
@@ -709,6 +713,13 @@
                 return;
             }
             
+            // Ensure form action is an absolute path (starts with /)
+            if (form.action && !form.action.startsWith('http') && !form.action.startsWith('/')) {
+                // Make it an absolute path
+                form.action = '/' + form.action;
+                console.log('Fixed form action to absolute path:', form.action);
+            }
+            
             // Debug: log the form action
             console.log('Opening settlement form:', {
                 isCompanyClient: isCompanyClient,
@@ -723,7 +734,17 @@
         document.getElementById('settle-client-exchange-id').value = clientExchangeId;
         document.getElementById('settle-client-name').value = clientName;
         document.getElementById('settle-exchange-name').value = exchangeName;
-            document.getElementById('settle-payment-type').value = paymentType;
+        document.getElementById('settle-payment-type').value = paymentType;
+        
+        // Update section parameter based on payment type
+        const sectionParam = document.getElementById('section-param');
+        if (sectionParam) {
+            if (paymentType === 'admin_pays_profit') {
+                sectionParam.value = 'you-owe';
+            } else {
+                sectionParam.value = 'clients-owe';
+            }
+        }
             
             // Store combined share for validation
             const combinedShareValue = parseFloat(combinedShare) || 0;
@@ -733,8 +754,9 @@
             
             // For admin_pays_profit: You pay ONLY your share amount, NOT the full profit
             if (paymentType === 'admin_pays_profit') {
-                // amount parameter is already the share amount (my_share) for company clients
-                const shareAmount = parseFloat(amount) || 0;
+                // amount parameter might be negative for MY CLIENTS (e.g., -5.0)
+                // Take absolute value to normalize it
+                const shareAmount = Math.abs(parseFloat(amount) || 0);
                 amountInput.value = shareAmount.toFixed(1);
                 amountInput.max = shareAmount.toFixed(1);  // Max is the share amount only
                 amountInput.setAttribute('data-max-amount', shareAmount.toFixed(1));
@@ -896,8 +918,12 @@
             }
             modal.style.display = 'flex';
             console.log('Modal displayed successfully');
+            console.log('Modal element:', modal);
+            console.log('Modal computed style:', window.getComputedStyle(modal).display);
+            console.log('Modal z-index:', window.getComputedStyle(modal).zIndex);
         } catch (error) {
             console.error('Error in showSettlementForm:', error);
+            console.error('Error stack:', error.stack);
             alert('Error opening payment form: ' + error.message);
         }
     }
@@ -975,6 +1001,7 @@
         }
         
         // Ensure client_type is set - use existing value first, then URL, then 'all'
+        const urlParams = new URLSearchParams(window.location.search);
         let hiddenInput = document.querySelector('input[name="client_type"]');
         let clientType = 'all';
         
@@ -984,19 +1011,18 @@
             console.log('Using client_type from form:', clientType);
         } else {
             // If not in form, get from URL
-        const urlParams = new URLSearchParams(window.location.search);
             clientType = urlParams.get('client_type') || 'all';
             console.log('Using client_type from URL:', clientType);
             
             // Create or update the hidden input
-        if (!hiddenInput) {
-            hiddenInput = document.createElement('input');
-            hiddenInput.type = 'hidden';
-            hiddenInput.name = 'client_type';
-            hiddenInput.id = 'settle-client-type';
-            document.getElementById('settlement-form-content').appendChild(hiddenInput);
-        }
-        hiddenInput.value = clientType;
+            if (!hiddenInput) {
+                hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = 'client_type';
+                hiddenInput.id = 'settle-client-type';
+                document.getElementById('settlement-form-content').appendChild(hiddenInput);
+            }
+            hiddenInput.value = clientType;
         }
         
         console.log('Final client_type for form submission:', clientType);
@@ -1089,6 +1115,21 @@
         
         // Form will submit normally - don't prevent default
         console.log('Allowing form submission to:', form.action);
+        console.log('Final form data before submission:', {
+            client_id: clientId,
+            client_exchange_id: clientExchangeId,
+            amount: amount,
+            payment_type: paymentType,
+            date: date,
+            report_type: reportType,
+            client_type: clientType
+        });
+        
+        // Double-check: Ensure form action is absolute URL
+        if (form.action && !form.action.startsWith('http') && !form.action.startsWith('/')) {
+            console.warn('Form action is relative, may cause issues:', form.action);
+        }
+        
         return true;
     }
     
@@ -1275,6 +1316,12 @@
                 }
             });
         });
+    };
+    
+    // Test function availability
+    console.log('showSettlementForm function defined:', typeof window.showSettlementForm);
+    if (typeof window.showSettlementForm !== 'function') {
+        console.error('CRITICAL: showSettlementForm is not a function!');
     }
 </script>
 </div>
