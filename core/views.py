@@ -41,66 +41,73 @@ def get_exchange_balance(client_exchange, as_of_date=None):
 
 def get_old_balance(client_exchange, balance_record_date=None, balance_record_created_at=None, current_balance=None, combined_share=None, combined_share_pct=None):
     """
-    Get the exchange balance immediately BEFORE a balance record is created.
+    Get the exchange balance immediately BEFORE a profit/loss event.
     
-    📘 OLD BALANCE CALCULATION RULES (Final Document)
+    📘 OLD BALANCE CALCULATION (Final Rules)
     
-    Purpose: Old Balance represents 100% actual money that existed in the exchange BEFORE the client played.
+    Definition: Old Balance = Exchange balance immediately BEFORE the profit/loss event
+    This is a time-based value, not a derived percentage value.
     
-    Old Balance is NOT:
-    - Pending amount
-    - Share amount
-    - Profit amount
-    - Loss amount
+    🚫 WHAT OLD BALANCE IS NOT (VERY IMPORTANT):
+    - ❌ NOT latest balance
+    - ❌ NOT current exchange balance
+    - ❌ NOT pending amount
+    - ❌ NOT share amount
+    - ❌ NOT (current + share)
+    - ❌ NOT including future funding
     
-    Old Balance is always pure exchange money (100%).
+    ✅ FORMULA (GENERAL):
+    Step 1: Identify the event date (D) - The date of LOSS or PROFIT or Balance Record
+    Step 2: Find the last balance record before date D
+            LastBalanceBeforeD = latest BALANCE_RECORD where record.date < D
+            If it exists → use it
+            If not → fallback to funding
+    Step 3: Find total funding before date D
+            FundingBeforeD = SUM(FUNDING.amount) where funding.date < D
+    Step 4: Compute OLD BALANCE
+            IF LastBalanceBeforeD exists:
+                Old Balance = LastBalanceBeforeD.amount
+            ELSE:
+                Old Balance = FundingBeforeD
     
-    Core Definitions:
-    - Old Balance: Exchange balance before profit or loss occurred
-    - Current Balance: Exchange balance after play (from Balance Record)
-    - Difference = Current Balance - Old Balance
-      * If positive: PROFIT
-      * If negative: LOSS
+    🟢 PROFIT / 🔴 LOSS DOES NOT CHANGE OLD BALANCE FORMULA:
+    The same Old Balance formula applies for:
+    - Profit case
+    - Loss case
+    - My Client
+    - Company Client
+    Only the difference sign changes.
     
-    Universal Golden Rule:
-    - Old Balance and Current Balance always show 100% exchange money
-    - Shares are applied ONLY on the difference, never on balances
-    - This rule is same for My Clients and Company Clients
+    🧮 DIFFERENCE (AFTER OLD BALANCE):
+    Once Old Balance is known:
+    Difference = Current Balance - Old Balance
+    - If Difference > 0 → PROFIT (you pay share)
+    - If Difference < 0 → LOSS (client pays share)
     
-    Calculation Steps (Primary Method):
-    1. Find the previous balance record (by date and created_at) before this one
-    2. If previous record exists, return its balance (which already reflects all transactions up to that point)
-    3. If no previous record, calculate from transactions: Total funding up to that moment
-    
-    Special Case - Reverse Formula (LOSS ONLY):
-    ⚠️ This applies ONLY when old balance is not directly available
-    ⚠️ Never use this for profit
-    
-    Formula (LOSS ONLY):
-    100% Loss = Combined Share ÷ Combined Share %
+    ⚠️ SPECIAL REVERSE FORMULA (LOSS ONLY — OPTIONAL):
+    Use ONLY if Old Balance cannot be found from history:
+    100% Loss = CombinedShare ÷ CombinedShare%
     Old Balance = Current Balance + 100% Loss
+    ❌ Never use this for profit
+    ❌ Never use if history exists
     
-    Example:
-    Current Balance = ₹120
-    Combined Share = ₹5.5
-    Combined Share % = 11%
-    100% Loss = 5.5 ÷ 0.11 = ₹50
-    Old Balance = 120 + 50 = ₹170
+    🧠 ONE-LINE RULE:
+    Old Balance comes from the PAST, never from the CURRENT state.
     
     Args:
         client_exchange: ClientExchange instance
-        balance_record_date: Optional date of the balance record. If None, uses the latest balance record.
+        balance_record_date: Date of the profit/loss event (D). If None, uses the latest balance record date.
         balance_record_created_at: Optional datetime when the balance record was created (for ordering)
         current_balance: Optional current balance (for reverse calculation in LOSS case only)
         combined_share: Optional combined share amount (for reverse calculation in LOSS case only)
         combined_share_pct: Optional combined share percentage (for reverse calculation in LOSS case only)
     
     Returns:
-        Old balance (the exchange balance just before the balance record - always 100% exchange money)
+        Old balance (the exchange balance just before the profit/loss event - always 100% exchange money)
         
     Examples:
-        - If previous balance record = ₹100, Old Balance = ₹100
-        - If no previous record but funding = ₹100, Old Balance = ₹100
+        - Event date = Dec 1, Last balance before Dec 1 = ₹100 → Old Balance = ₹100
+        - Event date = Dec 1, No balance before, Funding before Dec 1 = ₹100 → Old Balance = ₹100
         - For LOSS reverse: Current = ₹120, Combined Share = ₹5.5, Share % = 11%, Old Balance = ₹170
     """
     # If no date specified, get the latest balance record
@@ -147,15 +154,16 @@ def get_old_balance(client_exchange, balance_record_date=None, balance_record_cr
         # This handles the case where this is the first balance record
         # Old Balance = Total funding up to that moment (100% exchange money)
         if balance_record_date:
-            # Calculate total funding up to this date
+            # Calculate total funding BEFORE this date (not including this date)
             # Old Balance = Total funding (100% exchange money before play)
             # We use ONLY funding, not profit/loss, because:
             # - Funding is the actual money given
             # - Profit/Loss transactions are created FROM balance changes, not before
+            # IMPORTANT: Use date < D (strictly before), not date <= D
             funding_filter = {
                 "client_exchange": client_exchange,
                 "transaction_type": Transaction.TYPE_FUNDING,
-                "date__lte": balance_record_date
+                "date__lt": balance_record_date  # Strictly before event date D
             }
             
             total_funding = Transaction.objects.filter(**funding_filter).aggregate(total=Sum("amount"))["total"] or Decimal(0)
@@ -1154,11 +1162,11 @@ def settle_payment(request):
                         current_pending = current_outstanding  # For compatibility with rest of code
                     else:
                         # Company Clients: Use PendingAmount
-                        pending, _ = PendingAmount.objects.get_or_create(
-                            client_exchange=client_exchange,
-                            defaults={"pending_amount": Decimal(0)}
-                        )
-                        current_pending = pending.pending_amount
+                    pending, _ = PendingAmount.objects.get_or_create(
+                        client_exchange=client_exchange,
+                        defaults={"pending_amount": Decimal(0)}
+                    )
+                    current_pending = pending.pending_amount
                     
                     # For MY CLIENTS: Outstanding is already the net payable amount (netted)
                     # For COMPANY CLIENTS: Calculate from losses
@@ -1222,7 +1230,7 @@ def settle_payment(request):
                         # Client pays: Company Share Total (10% of total loss)
                         # Split: Your Cut (1% of total) + Company Net (9% of total)
                         # Payment is split 1:9 (Your Cut : Company Net)
-                        payment_amount = min(amount, current_pending)  # Don't allow overpayment
+                    payment_amount = min(amount, current_pending)  # Don't allow overpayment
                         
                         # Split payment: Your Cut (1%) vs Company Net (9%) = 1:9 ratio
                         # So Your Cut gets 1/10 of payment, Company Net gets 9/10 of payment
@@ -1241,7 +1249,7 @@ def settle_payment(request):
                         company_share_amount = company_share_amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
                         
                         # Reduce pending by payment amount for company clients
-                        pending.pending_amount = max(Decimal(0), current_pending - payment_amount)
+                    pending.pending_amount = max(Decimal(0), current_pending - payment_amount)
                     pending.save()
                     
                     # Create SETTLEMENT transaction for client payment
@@ -1392,9 +1400,9 @@ def client_delete(request, pk):
         client_type = "company" if client.is_company_client else "my"
         
         try:
-            client.delete()
-            from django.contrib import messages
-            messages.success(request, f"Client '{client_name}' has been deleted successfully.")
+        client.delete()
+        from django.contrib import messages
+        messages.success(request, f"Client '{client_name}' has been deleted successfully.")
             
             # Redirect to the appropriate list based on client type
             if client_type == "company":
@@ -1416,7 +1424,7 @@ def client_delete(request, pk):
             elif client_type == "my":
                 return redirect(reverse("my_clients:list"))
             else:
-                return redirect(reverse("clients:list"))
+        return redirect(reverse("clients:list"))
     
     # If GET, show confirmation or redirect
     return redirect(reverse("clients:detail", args=[client.pk]))
@@ -1465,7 +1473,7 @@ def transaction_list(request):
                 client_exchange__daily_balances__date=F('date')
             ).distinct()
         else:
-            transactions = transactions.filter(transaction_type=tx_type)
+        transactions = transactions.filter(transaction_type=tx_type)
     if search_query:
         transactions = transactions.filter(
             Q(client_exchange__client__name__icontains=search_query) |
@@ -2605,7 +2613,7 @@ def transaction_create(request):
                 client_share = amount - your_share
                 # Only calculate company share for company clients
                 if is_company_client:
-                    company_share = client_share * (client_exchange.company_share_pct / 100)
+                company_share = client_share * (client_exchange.company_share_pct / 100)
                 else:
                     company_share = Decimal(0)  # No company share for "my clients"
                 your_share_after_company = your_share  # Admin keeps full share, company takes from client
@@ -2841,7 +2849,7 @@ def transaction_edit(request, pk):
                 client_share = amount - your_share
                 # Only calculate company share for company clients
                 if is_company_client:
-                    company_share = client_share * (client_exchange.company_share_pct / 100)
+                company_share = client_share * (client_exchange.company_share_pct / 100)
                 else:
                     company_share = Decimal(0)  # No company share for "my clients"
                 your_share_after_company = your_share  # Admin keeps full share, company takes from client
