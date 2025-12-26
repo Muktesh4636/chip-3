@@ -1162,11 +1162,11 @@ def settle_payment(request):
                         current_pending = current_outstanding  # For compatibility with rest of code
                     else:
                         # Company Clients: Use PendingAmount
-                    pending, _ = PendingAmount.objects.get_or_create(
-                        client_exchange=client_exchange,
-                        defaults={"pending_amount": Decimal(0)}
-                    )
-                    current_pending = pending.pending_amount
+                        pending, _ = PendingAmount.objects.get_or_create(
+                            client_exchange=client_exchange,
+                            defaults={"pending_amount": Decimal(0)}
+                        )
+                        current_pending = pending.pending_amount
                     
                     # For MY CLIENTS: Outstanding is already the net payable amount (netted)
                     # For COMPANY CLIENTS: Calculate from losses
@@ -1230,7 +1230,7 @@ def settle_payment(request):
                         # Client pays: Company Share Total (10% of total loss)
                         # Split: Your Cut (1% of total) + Company Net (9% of total)
                         # Payment is split 1:9 (Your Cut : Company Net)
-                    payment_amount = min(amount, current_pending)  # Don't allow overpayment
+                        payment_amount = min(amount, current_pending)  # Don't allow overpayment
                         
                         # Split payment: Your Cut (1%) vs Company Net (9%) = 1:9 ratio
                         # So Your Cut gets 1/10 of payment, Company Net gets 9/10 of payment
@@ -1400,9 +1400,9 @@ def client_delete(request, pk):
         client_type = "company" if client.is_company_client else "my"
         
         try:
-        client.delete()
-        from django.contrib import messages
-        messages.success(request, f"Client '{client_name}' has been deleted successfully.")
+            client.delete()
+            from django.contrib import messages
+            messages.success(request, f"Client '{client_name}' has been deleted successfully.")
             
             # Redirect to the appropriate list based on client type
             if client_type == "company":
@@ -1424,7 +1424,7 @@ def client_delete(request, pk):
             elif client_type == "my":
                 return redirect(reverse("my_clients:list"))
             else:
-        return redirect(reverse("clients:list"))
+                return redirect(reverse("clients:list"))
     
     # If GET, show confirmation or redirect
     return redirect(reverse("clients:detail", args=[client.pk]))
