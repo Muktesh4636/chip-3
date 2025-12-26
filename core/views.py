@@ -39,42 +39,69 @@ def get_exchange_balance(client_exchange, as_of_date=None):
         return total_funding
 
 
-def get_old_balance(client_exchange, balance_record_date=None, balance_record_created_at=None):
+def get_old_balance(client_exchange, balance_record_date=None, balance_record_created_at=None, current_balance=None, combined_share=None, combined_share_pct=None):
     """
     Get the exchange balance immediately BEFORE a balance record is created.
     
-    Definition: Old Balance is the exchange balance that existed immediately BEFORE a new balance is recorded.
-    It represents the true balance before profit or loss happened.
+    📘 OLD BALANCE CALCULATION RULES (Final Document)
+    
+    Purpose: Old Balance represents 100% actual money that existed in the exchange BEFORE the client played.
     
     Old Balance is NOT:
-    - Total funding
     - Pending amount
-    - Your share
-    - Company share
-    - Reduced or increased by payments
+    - Share amount
+    - Profit amount
+    - Loss amount
     
-    Formula: Old Balance = exchange balance just before recording
+    Old Balance is always pure exchange money (100%).
     
-    Calculation Steps:
+    Core Definitions:
+    - Old Balance: Exchange balance before profit or loss occurred
+    - Current Balance: Exchange balance after play (from Balance Record)
+    - Difference = Current Balance - Old Balance
+      * If positive: PROFIT
+      * If negative: LOSS
+    
+    Universal Golden Rule:
+    - Old Balance and Current Balance always show 100% exchange money
+    - Shares are applied ONLY on the difference, never on balances
+    - This rule is same for My Clients and Company Clients
+    
+    Calculation Steps (Primary Method):
     1. Find the previous balance record (by date and created_at) before this one
     2. If previous record exists, return its balance (which already reflects all transactions up to that point)
-    3. If no previous record, calculate from transactions (funding + profit - loss) up to that moment
+    3. If no previous record, calculate from transactions: Total funding up to that moment
     
-    The last known exchange balance can come from:
-    - Previous balance record, OR
-    - Previous balance + funding + profit - loss (calculated from transactions)
+    Special Case - Reverse Formula (LOSS ONLY):
+    ⚠️ This applies ONLY when old balance is not directly available
+    ⚠️ Never use this for profit
+    
+    Formula (LOSS ONLY):
+    100% Loss = Combined Share ÷ Combined Share %
+    Old Balance = Current Balance + 100% Loss
+    
+    Example:
+    Current Balance = ₹120
+    Combined Share = ₹5.5
+    Combined Share % = 11%
+    100% Loss = 5.5 ÷ 0.11 = ₹50
+    Old Balance = 120 + 50 = ₹170
     
     Args:
         client_exchange: ClientExchange instance
         balance_record_date: Optional date of the balance record. If None, uses the latest balance record.
         balance_record_created_at: Optional datetime when the balance record was created (for ordering)
+        current_balance: Optional current balance (for reverse calculation in LOSS case only)
+        combined_share: Optional combined share amount (for reverse calculation in LOSS case only)
+        combined_share_pct: Optional combined share percentage (for reverse calculation in LOSS case only)
     
     Returns:
-        Old balance (the exchange balance just before the balance record)
+        Old balance (the exchange balance just before the balance record - always 100% exchange money)
         
     Examples:
         - If previous balance record = ₹100, Old Balance = ₹100
-        - If no previous record but funding = ₹100, profit = ₹70, loss = ₹30, Old Balance = ₹140
+        - If no previous record but funding = ₹100, Old Balance = ₹100
+        - For LOSS reverse: Current = ₹120, Combined Share = ₹5.5, Share % = 11%, Old Balance = ₹170
     """
     # If no date specified, get the latest balance record
     if balance_record_date is None:
@@ -118,31 +145,37 @@ def get_old_balance(client_exchange, balance_record_date=None, balance_record_cr
     else:
         # No previous balance record exists, calculate from transactions up to this date
         # This handles the case where this is the first balance record
-        # Old Balance = funding + profit - loss (all transactions up to balance_record_date)
+        # Old Balance = Total funding up to that moment (100% exchange money)
         if balance_record_date:
-            # Calculate from transactions up to this date
+            # Calculate total funding up to this date
+            # Old Balance = Total funding (100% exchange money before play)
+            # We use ONLY funding, not profit/loss, because:
+            # - Funding is the actual money given
+            # - Profit/Loss transactions are created FROM balance changes, not before
             funding_filter = {
                 "client_exchange": client_exchange,
                 "transaction_type": Transaction.TYPE_FUNDING,
                 "date__lte": balance_record_date
             }
-            profit_filter = {
-                "client_exchange": client_exchange,
-                "transaction_type": Transaction.TYPE_PROFIT,
-                "date__lte": balance_record_date
-            }
-            loss_filter = {
-                "client_exchange": client_exchange,
-                "transaction_type": Transaction.TYPE_LOSS,
-                "date__lte": balance_record_date
-            }
             
             total_funding = Transaction.objects.filter(**funding_filter).aggregate(total=Sum("amount"))["total"] or Decimal(0)
-            total_profit = Transaction.objects.filter(**profit_filter).aggregate(total=Sum("amount"))["total"] or Decimal(0)
-            total_loss = Transaction.objects.filter(**loss_filter).aggregate(total=Sum("amount"))["total"] or Decimal(0)
             
-            # Old Balance = funding + profit - loss
-            return total_funding + total_profit - total_loss
+            # Old Balance = Total funding (100% exchange money)
+            # This is the pure exchange money before any profit/loss occurred
+            old_balance = total_funding
+            
+            # SPECIAL CASE: Reverse formula for LOSS ONLY (when old balance not available from funding)
+            # This is a fallback when we have current balance and combined share but no funding record
+            if old_balance == 0 and current_balance is not None and combined_share is not None and combined_share_pct is not None:
+                # This is LOSS case (current balance < old balance would be)
+                # Reverse formula: Old Balance = Current Balance + 100% Loss
+                # where 100% Loss = Combined Share ÷ Combined Share %
+                if combined_share > 0 and combined_share_pct > 0:
+                    loss_100_percent = combined_share / (combined_share_pct / Decimal(100))
+                    old_balance = current_balance + loss_100_percent
+                    old_balance = old_balance.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+            
+            return old_balance
         else:
             # No date specified, use get_exchange_balance (which handles current state)
             return get_exchange_balance(client_exchange)
