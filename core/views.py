@@ -2613,7 +2613,7 @@ def transaction_create(request):
                 client_share = amount - your_share
                 # Only calculate company share for company clients
                 if is_company_client:
-                company_share = client_share * (client_exchange.company_share_pct / 100)
+                    company_share = client_share * (client_exchange.company_share_pct / 100)
                 else:
                     company_share = Decimal(0)  # No company share for "my clients"
                 your_share_after_company = your_share  # Admin keeps full share, company takes from client
@@ -2849,7 +2849,7 @@ def transaction_edit(request, pk):
                 client_share = amount - your_share
                 # Only calculate company share for company clients
                 if is_company_client:
-                company_share = client_share * (client_exchange.company_share_pct / 100)
+                    company_share = client_share * (client_exchange.company_share_pct / 100)
                 else:
                     company_share = Decimal(0)  # No company share for "my clients"
                 your_share_after_company = your_share  # Admin keeps full share, company takes from client
