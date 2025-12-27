@@ -428,7 +428,7 @@
         You Owe Clients
     </button>
     <div style="margin-left: auto; display: flex; align-items: center;">
-        <a href="{% url 'pending:export_csv' %}?report_type={{ report_type }}&section=all{% if client_type_filter != 'all' %}&client_type={{ client_type_filter }}{% endif %}" class="btn" style="text-decoration: none; padding: 8px 16px; font-size: 14px; margin-left: 12px;">
+        <a href="{% url 'pending:export_csv' %}?report_type={{ report_type }}&section=all{% if client_type_filter != 'all' %}&client_type={{ client_type_filter }}{% endif %}{% if combine_shares %}&combine_shares=true{% endif %}" class="btn" style="text-decoration: none; padding: 8px 16px; font-size: 14px; margin-left: 12px;">
             📥 Download All Reports (CSV)
         </a>
     </div>
@@ -440,7 +440,7 @@
             Clients Owe You
         </h2>
         <div style="display: flex; gap: 12px; align-items: center;">
-            <a href="{% url 'pending:export_csv' %}?report_type={{ report_type }}&section=clients-owe{% if client_type_filter != 'all' %}&client_type={{ client_type_filter }}{% endif %}" class="btn" style="text-decoration: none; padding: 8px 16px; font-size: 14px;">
+            <a href="{% url 'pending:export_csv' %}?report_type={{ report_type }}&section=clients-owe{% if client_type_filter != 'all' %}&client_type={{ client_type_filter }}{% endif %}{% if combine_shares %}&combine_shares=true{% endif %}" class="btn" style="text-decoration: none; padding: 8px 16px; font-size: 14px;">
                 📥 Download CSV Report
             </a>
             {% if client_type_filter == 'company' or client_type_filter == 'all' %}
@@ -550,7 +550,7 @@
             You Owe Clients
         </h2>
         <div style="display: flex; gap: 12px; align-items: center;">
-            <a href="{% url 'pending:export_csv' %}?report_type={{ report_type }}&section=you-owe{% if client_type_filter != 'all' %}&client_type={{ client_type_filter }}{% endif %}" class="btn" style="text-decoration: none; padding: 8px 16px; font-size: 14px;">
+            <a href="{% url 'pending:export_csv' %}?report_type={{ report_type }}&section=you-owe{% if client_type_filter != 'all' %}&client_type={{ client_type_filter }}{% endif %}{% if combine_shares %}&combine_shares=true{% endif %}" class="btn" style="text-decoration: none; padding: 8px 16px; font-size: 14px;">
                 📥 Download CSV Report
             </a>
             {% if client_type_filter == 'company' or client_type_filter == 'all' %}
@@ -1298,6 +1298,9 @@
         
         // Initialize table columns based on current state - ensure columns are visible
         updateTableColumns(combineShares);
+        
+        // Initialize download links based on current state
+        updateDownloadLinks(combineShares);
     });
     
     // Toggle combine shares view - smooth and instant without page reload
@@ -1331,6 +1334,31 @@
             url.searchParams.delete('combine_shares');
         }
         window.history.replaceState({}, '', url);
+        
+        // Update download report links to include combine_shares parameter
+        updateDownloadLinks(combineShares);
+    }
+    
+    // Update download report links based on combine_shares state
+    function updateDownloadLinks(combineShares) {
+        const allDownloadLinks = document.querySelectorAll('a[href*="export_csv"]');
+        allDownloadLinks.forEach(link => {
+            const href = link.getAttribute('href');
+            if (href) {
+                // Parse the URL
+                const url = new URL(href, window.location.origin);
+                
+                // Update combine_shares parameter
+                if (combineShares) {
+                    url.searchParams.set('combine_shares', 'true');
+                } else {
+                    url.searchParams.delete('combine_shares');
+                }
+                
+                // Update the link
+                link.setAttribute('href', url.pathname + url.search);
+            }
+        });
     }
     
     // Update table columns dynamically - smooth and instant

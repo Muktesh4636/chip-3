@@ -1454,28 +1454,28 @@ def settle_payment(request):
                         
                         # Create SETTLEMENT transaction where admin pays client
                         transaction = Transaction.objects.create(
-                            client_exchange=client_exchange,
-                            date=datetime.strptime(tx_date, "%Y-%m-%d").date(),
-                            transaction_type=Transaction.TYPE_SETTLEMENT,
-                            amount=amount,
-                            client_share_amount=amount,  # Client receives
-                            your_share_amount=Decimal(0),  # Admin pays, doesn't receive
-                            company_share_amount=Decimal(0),
-                            note=note or f"Admin payment for client profit",
+                        client_exchange=client_exchange,
+                        date=datetime.strptime(tx_date, "%Y-%m-%d").date(),
+                        transaction_type=Transaction.TYPE_SETTLEMENT,
+                        amount=amount,
+                        client_share_amount=amount,  # Client receives
+                        your_share_amount=Decimal(0),  # Admin pays, doesn't receive
+                        company_share_amount=Decimal(0),
+                        note=note or f"Admin payment for client profit",
                         )
                         
                         from django.contrib import messages
                         messages.success(request, f"Payment of ₹{amount} recorded successfully for {client.name} - {client_exchange.exchange.name}. Client will no longer appear in 'You Owe Clients'.")
-                    
-                    # Debug print removed to prevent BrokenPipeError
-                    
-                    # Ensure session is saved before redirect
-                    request.session.modified = True
-                    
-                    redirect_url = f"?section=you-owe&report_type={report_type}"
-                    if client_type_filter and client_type_filter != 'all':
-                        redirect_url += f"&client_type={client_type_filter}"
-                    return redirect(reverse("pending:summary") + redirect_url)
+                        
+                        # Debug print removed to prevent BrokenPipeError
+                        
+                        # Ensure session is saved before redirect
+                        request.session.modified = True
+                        
+                        redirect_url = f"?section=you-owe&report_type={report_type}"
+                        if client_type_filter and client_type_filter != 'all':
+                            redirect_url += f"&client_type={client_type_filter}"
+                        return redirect(reverse("pending:summary") + redirect_url)
                 else:
                     # Invalid payment type
                     from django.contrib import messages
@@ -2660,7 +2660,18 @@ def export_pending_csv(request):
     writer = csv.writer(response)
     
     # Write header row (exactly matching UI table - Amount first, then percentage)
-    if client_type_filter == 'company' or client_type_filter == 'all':
+    # If combine_shares is true and showing company clients, show only Company % column
+    if combine_shares and (client_type_filter == 'company' or client_type_filter == 'all'):
+        # Combined view for company clients: Show only Company % column
+        writer.writerow([
+            'Client Code',
+            'Client Name',
+            'Exchange',
+            'Old Balance',
+            'Current Balance',
+            'Company %',
+        ])
+    elif client_type_filter == 'company' or client_type_filter == 'all':
         # Company Clients: Show both My and Company columns
         writer.writerow([
             'Client Code',
@@ -2689,7 +2700,17 @@ def export_pending_csv(request):
     # Use SAME data source as pending UI - one row per client, horizontal format
     if section in ["all", "clients-owe"] and clients_owe_list:
         for item in clients_owe_list:
-            if client_type_filter == 'company' or client_type_filter == 'all':
+            # If combine_shares is true and it's a company client, show only Company %
+            if combine_shares and item.get("is_company_client", False):
+                writer.writerow([
+                    item["client_code"] or '—',
+                    item["client_name"],
+                    item["exchange_name"],
+                    float(item["old_balance"]),
+                    float(item["current_balance"]),
+                    float(item.get("company_share_pct", 0)),
+                ])
+            elif client_type_filter == 'company' or client_type_filter == 'all':
                 writer.writerow([
                     item["client_code"] or '—',
                     item["client_name"],
@@ -2715,7 +2736,17 @@ def export_pending_csv(request):
     # Write You Owe Clients section (if requested)
     if section in ["all", "you-owe"] and you_owe_list:
         for item in you_owe_list:
-            if client_type_filter == 'company' or client_type_filter == 'all':
+            # If combine_shares is true and it's a company client, show only Company %
+            if combine_shares and item.get("is_company_client", False):
+                writer.writerow([
+                    item["client_code"] or '—',
+                    item["client_name"],
+                    item["exchange_name"],
+                    float(item["old_balance"]),
+                    float(item["current_balance"]),
+                    float(item.get("company_share_pct", 0)),
+                ])
+            elif client_type_filter == 'company' or client_type_filter == 'all':
                 writer.writerow([
                     item["client_code"] or '—',
                     item["client_name"],
