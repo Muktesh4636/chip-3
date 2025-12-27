@@ -1470,14 +1470,14 @@ def settle_payment(request):
                         
                         # Create SETTLEMENT transaction where admin pays client
                         transaction = Transaction.objects.create(
-                            client_exchange=client_exchange,
-                            date=datetime.strptime(tx_date, "%Y-%m-%d").date(),
-                            transaction_type=Transaction.TYPE_SETTLEMENT,
-                            amount=amount,
-                            client_share_amount=amount,  # Client receives
-                            your_share_amount=Decimal(0),  # Admin pays, doesn't receive
-                            company_share_amount=Decimal(0),
-                            note=note or f"Admin payment for client profit",
+                        client_exchange=client_exchange,
+                        date=datetime.strptime(tx_date, "%Y-%m-%d").date(),
+                        transaction_type=Transaction.TYPE_SETTLEMENT,
+                        amount=amount,
+                        client_share_amount=amount,  # Client receives
+                        your_share_amount=Decimal(0),  # Admin pays, doesn't receive
+                        company_share_amount=Decimal(0),
+                        note=note or f"Admin payment for client profit",
                         )
                         
                         from django.contrib import messages
@@ -2325,6 +2325,8 @@ def pending_summary(request):
                 # For my clients: combined_share is already calculated correctly above
                 if client_exchange.client.is_company_client:
                     combined_share = my_share + company_share
+                else:
+                    combined_share = my_share
                 
                 # Get old_balance and current_balance for display
                 if client_exchange.client.is_company_client:
@@ -2861,10 +2863,13 @@ def export_pending_csv(request):
     writer = csv.writer(response)
     
     # Write header row (exactly matching UI table - Amount first, then percentage)
+    # Headers are written in uppercase to make them more prominent/visible
+    # Include Report Date as the first column in the header row for consistent formatting
     # If combine_shares is true and showing company clients, show Combined Share amount and Company %
     if combine_shares and (client_type_filter == 'company' or client_type_filter == 'all'):
         # Combined view for company clients: Show Combined Share amount and Company % columns
-        writer.writerow([
+        headers = [
+            'Report Date',
             'Client Code',
             'Client Name',
             'Exchange',
@@ -2872,11 +2877,14 @@ def export_pending_csv(request):
             'Current Balance',
             'Total Loss',
             'Combined Share (My + Company)',
-            'Company %',
-        ])
+            'My Share & Company Share (%)',
+        ]
+        # Write headers in uppercase for better visibility
+        writer.writerow([h.upper() for h in headers])
     elif client_type_filter == 'company' or client_type_filter == 'all':
         # Company Clients: Show both My and Company columns
-        writer.writerow([
+        headers = [
+            'Report Date',
             'Client Code',
             'Client Name',
             'Exchange',
@@ -2887,10 +2895,13 @@ def export_pending_csv(request):
             'My %',
             'Company Amount',
             'Company %',
-        ])
+        ]
+        # Write headers in uppercase for better visibility
+        writer.writerow([h.upper() for h in headers])
     else:
         # My Clients: Show only My columns
-        writer.writerow([
+        headers = [
+            'Report Date',
             'Client Code',
             'Client Name',
             'Exchange',
@@ -2899,7 +2910,9 @@ def export_pending_csv(request):
             'Total Loss',
             'My Amount',
             'My %',
-        ])
+        ]
+        # Write headers in uppercase for better visibility
+        writer.writerow([h.upper() for h in headers])
     
     # Write Clients Owe You section (if requested)
     # Use SAME data source as pending UI - one row per client, horizontal format
@@ -2908,6 +2921,7 @@ def export_pending_csv(request):
             # If combine_shares is true and it's a company client, show Combined Share amount and Company %
             if combine_shares and item.get("is_company_client", False):
                 writer.writerow([
+                    date.today().strftime('%Y-%m-%d'),  # Report Date
                     item["client_code"] or '—',
                     item["client_name"],
                     item["exchange_name"],
@@ -2919,6 +2933,7 @@ def export_pending_csv(request):
                 ])
             elif client_type_filter == 'company' or client_type_filter == 'all':
                 writer.writerow([
+                    date.today().strftime('%Y-%m-%d'),  # Report Date
                     item["client_code"] or '—',
                     item["client_name"],
                     item["exchange_name"],
@@ -2932,6 +2947,7 @@ def export_pending_csv(request):
                 ])
             else:
                 writer.writerow([
+                    date.today().strftime('%Y-%m-%d'),  # Report Date
                     item["client_code"] or '—',
                     item["client_name"],
                     item["exchange_name"],
@@ -2948,6 +2964,7 @@ def export_pending_csv(request):
             # If combine_shares is true and it's a company client, show Combined Share amount and Company %
             if combine_shares and item.get("is_company_client", False):
                 writer.writerow([
+                    date.today().strftime('%Y-%m-%d'),  # Report Date
                     item["client_code"] or '—',
                     item["client_name"],
                     item["exchange_name"],
@@ -2959,6 +2976,7 @@ def export_pending_csv(request):
                 ])
             elif client_type_filter == 'company' or client_type_filter == 'all':
                 writer.writerow([
+                    date.today().strftime('%Y-%m-%d'),  # Report Date
                     item["client_code"] or '—',
                     item["client_name"],
                     item["exchange_name"],
@@ -2972,6 +2990,7 @@ def export_pending_csv(request):
                 ])
             else:
                 writer.writerow([
+                    date.today().strftime('%Y-%m-%d'),  # Report Date
                     item["client_code"] or '—',
                     item["client_name"],
                     item["exchange_name"],
