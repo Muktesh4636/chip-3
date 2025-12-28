@@ -64,33 +64,43 @@ def get_old_balance_after_settlement(client_exchange, as_of_date=None):
     🔒 CORE TRUTH (THIS CANNOT BE BROKEN):
     If Total Funding = Current Exchange Balance, then there is NO PROFIT and NO PAYMENT in either direction.
     
-    🔒 GOLDEN RULE: When a payment (settlement) is recorded, Old Balance RESETS to the Current Exchange Balance at that moment.
+    🔑 GOLDEN RULE: When a partial settlement happens, reduce Old Balance by the loss portion that settlement represents.
+    
+    FORMULA FOR PARTIAL SETTLEMENTS:
+    1. Start with original Old Balance = SUM of all FUNDING transactions
+    2. For each settlement where client pays (your_share_amount > 0):
+       - Calculate loss portion: Loss Settled = Payment Amount / My Share %
+       - Example: Payment = ₹3, My Share % = 10% → Loss Settled = 3 / 0.10 = ₹30
+       - Reduce Old Balance: New Old Balance = Old Balance - Loss Settled
+    3. Add funding AFTER settlements
+    
+    EXAMPLE:
+    - Initial: Old Balance = ₹100, Current Balance = ₹40, Loss = ₹60, My Share % = 10%, Pending = ₹6
+    - Client pays ₹3 (partial payment):
+      - Loss Settled = 3 / 10% = ₹30
+      - New Old Balance = 100 - 30 = ₹70
+      - Remaining Loss = 70 - 40 = ₹30
+      - New Pending = 10% of 30 = ₹3
     
     BUSINESS RULES:
     1. Old Balance is NEVER set manually - calculated automatically from transactions
     2. IF no SETTLEMENT transaction exists:
        Old Balance = SUM of all FUNDING transactions
     3. IF one or more SETTLEMENT transactions exist:
-       Old Balance = Current Exchange Balance at settlement time (from ClientDailyBalance)
-                   + SUM of FUNDING transactions AFTER that settlement
-    4. LOSS, PROFIT, and BALANCE_RECORD transactions MUST NOT affect Old Balance (except to find current balance at settlement)
+       Old Balance = Original Funding - (Sum of Loss Portions from Settlements) + Funding After Settlements
+    4. LOSS, PROFIT, and BALANCE_RECORD transactions MUST NOT affect Old Balance
     5. Old Balance must NEVER be 0 if at least one FUNDING exists and no settlement exists
     
     🧠 ONE-LINE SANITY CHECK (always works):
     Ask: "If I take all my money back now, will I gain or lose?"
     - If Total Funding = Current Balance → No gain, no loss → Net Change = 0
     
-    ⚠️ VERY IMPORTANT RULE:
-    Balance records NEVER create profit or loss by themselves.
-    They only reflect the current state.
-    Profit/Loss exists ONLY when Current Balance ≠ Total Funding (after settlements).
-    
     Args:
         client_exchange: ClientExchange instance (works for both My Clients and Company Clients)
         as_of_date: Optional date to calculate as of. If None, uses current state.
     
     Returns:
-        Old Balance (current balance at settlement + funding after settlement, or total funding if no settlement)
+        Old Balance (original funding minus loss portions from settlements, plus funding after settlements)
     """
     from core.models import ClientDailyBalance
     
@@ -106,69 +116,96 @@ def get_old_balance_after_settlement(client_exchange, as_of_date=None):
     last_settlement = settlement_query.order_by("-date", "-created_at").first()
     
     if last_settlement:
-        # Settlement exists - Old Balance RESETS to Current Exchange Balance at settlement time
-        # 🔒 KEY RULE: Payment = closing the book → Old Balance becomes the current balance
+        # 🔑 GOLDEN RULE: When a partial settlement happens, reduce Old Balance by the loss portion that settlement represents.
+        # 
+        # ✅ CORRECT FORMULA:
+        # old_balance = previous_old_balance - loss_settled + funding_after_last_settlement
+        # 
+        # Where:
+        # - previous_old_balance = funding before first settlement
+        # - loss_settled = settlement_amount / (my_share_pct / 100)
+        # - funding_after_last_settlement = funding transactions after last settlement
+        # 
+        # ❌ WRONG: old_balance = sum(all_funding) + settlement (this double-counts)
+        # ❌ WRONG: old_balance = previous_old_balance + funding (ignores settlement reduction)
         
-        # Find the balance record (ClientDailyBalance) at or BEFORE the settlement date
-        # This represents the Current Exchange Balance at the time of settlement
-        # Priority: 1) Balance record on same date as settlement, 2) Latest balance record before settlement
-        # IMPORTANT: Do NOT use balance records AFTER settlement - they represent new state, not settlement state
-        balance_at_settlement = ClientDailyBalance.objects.filter(
+        # Step 1: Get funding BEFORE the FIRST settlement (this is the base)
+        # Find the FIRST settlement to determine the cutoff
+        first_settlement_query = Transaction.objects.filter(
             client_exchange=client_exchange,
-            date__lte=last_settlement.date  # Balance record at or BEFORE settlement (not after)
-        ).order_by("-date", "-created_at").first()  # Get the latest one at/before settlement
+            transaction_type=Transaction.TYPE_SETTLEMENT
+        )
+        if as_of_date:
+            first_settlement_query = first_settlement_query.filter(date__lte=as_of_date)
         
-        if balance_at_settlement:
-            # Use the balance record's remaining_balance + extra_adjustment as the Old Balance after settlement
-            base_old_balance = balance_at_settlement.remaining_balance + (balance_at_settlement.extra_adjustment or Decimal(0))
-            
-            # Debug prints removed to prevent BrokenPipeError
-        else:
-            # No balance record found at settlement - fallback to calculating from transactions
-            # This should rarely happen, but we need a fallback
-            # Debug prints removed to prevent BrokenPipeError
-            
-            # Get all FUNDING transactions up to and including settlement date
-            funding_up_to_settlement = Transaction.objects.filter(
+        first_settlement = first_settlement_query.order_by("date", "created_at").first()
+        
+        if first_settlement:
+            # Get funding BEFORE first settlement (this is the original base)
+            funding_before_first_settlement = Transaction.objects.filter(
                 client_exchange=client_exchange,
                 transaction_type=Transaction.TYPE_FUNDING,
-                date__lte=last_settlement.date
+                date__lt=first_settlement.date  # Funding BEFORE first settlement (strictly before)
             ).aggregate(total=Sum("amount"))["total"] or Decimal(0)
             
-            # Get all SETTLEMENT transactions up to and including settlement date
-            settlements_up_to_settlement = Transaction.objects.filter(
-                client_exchange=client_exchange,
-                transaction_type=Transaction.TYPE_SETTLEMENT,
-                date__lte=last_settlement.date
-            )
-            
-            # Calculate net settlement impact
-            settlement_received = settlements_up_to_settlement.filter(
-                your_share_amount__gt=0
-            ).aggregate(total=Sum("your_share_amount"))["total"] or Decimal(0)
-            
-            settlement_paid = settlements_up_to_settlement.filter(
-                client_share_amount__gt=0,
-                your_share_amount=0
-            ).aggregate(total=Sum("client_share_amount"))["total"] or Decimal(0)
-            
-            base_old_balance = funding_up_to_settlement - settlement_received + settlement_paid
+            # Start with funding before first settlement
+            current_old_balance = funding_before_first_settlement
+        else:
+            # No settlement found (shouldn't happen, but safety check)
+            current_old_balance = Decimal(0)
         
-        # Step 2: Add funding AFTER settlement (Funding After Settlement rule)
-        # Only count FUNDING transactions - ignore LOSS, PROFIT, BALANCE_RECORD
+        # Step 2: Get all settlements where client pays (your_share_amount > 0) up to/as_of_date
+        # These are settlements where client pays you (reduces pending loss)
+        settlements_where_client_pays = Transaction.objects.filter(
+            client_exchange=client_exchange,
+            transaction_type=Transaction.TYPE_SETTLEMENT,
+            your_share_amount__gt=0  # Client pays you
+        )
+        if as_of_date:
+            settlements_where_client_pays = settlements_where_client_pays.filter(date__lte=as_of_date)
+        
+        settlements_where_client_pays = settlements_where_client_pays.order_by("date", "created_at")
+        
+        # Step 3: For each settlement, calculate loss portion and REDUCE Old Balance
+        my_share_pct = client_exchange.my_share_pct or Decimal(0)
+        
+        for settlement in settlements_where_client_pays:
+            # Payment amount = your_share_amount (what client paid you)
+            payment_amount = settlement.your_share_amount
+            
+            if my_share_pct > 0:
+                # Calculate loss portion: Loss Settled = Payment Amount / My Share %
+                # Example: Payment = ₹8, My Share % = 10% → Loss Settled = 8 / 0.10 = ₹80
+                loss_settled = payment_amount / (my_share_pct / Decimal(100))
+                loss_settled = loss_settled.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+                
+                # 🔑 CRITICAL: Reduce Old Balance by the loss portion
+                # Settlement ALWAYS reduces the base BEFORE adding new funding
+                current_old_balance = current_old_balance - loss_settled
+            else:
+                # If my_share_pct is 0, we can't calculate loss portion - skip this settlement
+                # This shouldn't happen in normal cases
+                pass
+        
+        # Step 4: Add funding AFTER the last settlement (Funding After Settlement rule)
+        # Only add funding that came AFTER the last settlement
         funding_after_query = Transaction.objects.filter(
             client_exchange=client_exchange,
-            transaction_type=Transaction.TYPE_FUNDING,  # Exact match: "FUNDING"
-            date__gt=last_settlement.date  # Funding AFTER settlement (strictly after)
+            transaction_type=Transaction.TYPE_FUNDING,
+            date__gt=last_settlement.date  # Funding AFTER last settlement (strictly after)
         )
         if as_of_date:
             funding_after_query = funding_after_query.filter(date__lte=as_of_date)
         
         funding_after_settlement = funding_after_query.aggregate(total=Sum("amount"))["total"] or Decimal(0)
         
-        final_old_balance = base_old_balance + funding_after_settlement
+        # Final Old Balance = Base (after settlement reductions) + Funding After Settlements
+        final_old_balance = current_old_balance + funding_after_settlement
         
-        # Old Balance = Current Balance at Settlement + Funding After Settlement
+        # Ensure Old Balance is never negative
+        if final_old_balance < 0:
+            final_old_balance = Decimal(0)
+        
         return final_old_balance
     else:
         # No settlement exists - Old Balance = SUM of ALL FUNDING transactions
@@ -2140,10 +2177,29 @@ def pending_summary(request):
                 company_share = company_share.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
                 combined_share = combined_share.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
             else:
-                # MY CLIENTS: Combined Share = My Share (no company share)
-                # my_share is already calculated above from net_loss
+                # MY CLIENTS: Combined Share = Total Loss × My Share %
+                # This ensures Combined Share always reflects the share of Total Loss, even if client has partially paid
+                # Example: Total Loss = ₹10, My Share % = 10% → Combined Share = ₹1.0
+                combined_share_from_total_loss = (total_loss * my_share_pct) / Decimal(100)
+                combined_share_from_total_loss = combined_share_from_total_loss.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+                
+                # Subtract any payments already received
+                client_payments = Transaction.objects.filter(
+                    client_exchange=client_exchange,
+                    transaction_type=Transaction.TYPE_SETTLEMENT,
+                    client_share_amount=0,  # Client pays
+                    your_share_amount__gt=0  # You receive
+                ).aggregate(total=Sum("your_share_amount"))["total"] or Decimal(0)
+                
+                # Combined Share = Share from Total Loss - Payments Received
+                # This shows the remaining amount client owes you
+                combined_share = max(Decimal(0), combined_share_from_total_loss - client_payments)
+                combined_share = combined_share.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+                
+                # For MY CLIENTS: My Share = Combined Share (no company share)
+                # Update my_share to match combined_share for consistency
+                my_share = combined_share
                 company_share = Decimal(0)
-                combined_share = my_share
             
             clients_owe_list.append({
                 "client_id": client_exchange.client.pk,
@@ -2630,8 +2686,13 @@ def export_pending_csv(request):
                     # Pending = My Share from Net Loss - Settlements Received
                     my_share = max(Decimal(0), my_share_from_net_loss - client_payments)
                     my_share = my_share.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+                    
+                    # For MY CLIENTS: Combined Share = My Share (which is the pending amount)
+                    # This represents the remaining amount client owes you after settlements
+                    combined_share = my_share
                 else:
                     my_share = Decimal(0)
+                    combined_share = Decimal(0)
             else:
                 # COMPANY CLIENTS: Use net_client_tally (which already accounts for company share)
                 my_share = net_client_tally
@@ -2640,13 +2701,6 @@ def export_pending_csv(request):
                 current_balance = profit_loss_data["exchange_balance"]
                 old_balance = get_old_balance_after_settlement(client_exchange)
                 
-                # DEBUG: Track old_balance changes for client 'a1'
-                debug_a1 = client_exchange.client.name == 'a1'
-                if debug_a1:
-                    print(f"\n🔍 DEBUG START for 'a1'")
-                    print(f"  Initial old_balance: {old_balance}")
-                    print(f"  Initial current_balance: {current_balance}")
-                
                 # For company clients, always check total funding to ensure accurate Total Loss calculation
                 # Get total funding (the base amount given to client)
                 total_funding_for_old = Transaction.objects.filter(
@@ -2654,26 +2708,14 @@ def export_pending_csv(request):
                     transaction_type=Transaction.TYPE_FUNDING
                 ).aggregate(total=Sum("amount"))["total"] or Decimal(0)
                 
-                if debug_a1:
-                    print(f"  total_funding_for_old: {total_funding_for_old}")
-                    print(f"  net_client_tally: {net_client_tally}")
-                
                 # If there's a loss (net_client_tally > 0) and total funding > current balance,
                 # use total funding as old_balance to show the actual loss
                 if net_client_tally > 0 and total_funding_for_old > current_balance:
-                    old_balance_before = old_balance
                     old_balance = total_funding_for_old
-                    if debug_a1:
-                        print(f"  After check 1 (net_client_tally > 0): {old_balance_before} -> {old_balance}")
                 # If old_balance from settlement is less than or equal to current_balance,
                 # but total funding exists and is greater, use total funding
                 elif old_balance <= current_balance and total_funding_for_old > current_balance:
-                    old_balance_before = old_balance
                     old_balance = total_funding_for_old
-                    if debug_a1:
-                        print(f"  After check 2 (old_balance <= current): {old_balance_before} -> {old_balance}")
-                elif debug_a1:
-                    print(f"  Checks 1 & 2 skipped")
             
             # Get the raw amounts from net_tallies for company clients
             if client_exchange.client.is_company_client:
@@ -2708,29 +2750,18 @@ def export_pending_csv(request):
             
             # For company clients, prioritize old_balance if it's greater than current_balance
             # Only use total_funding if old_balance is wrong (equals current_balance) but total_funding is higher
-            debug_a1 = client_exchange.client.name == 'a1'
             if client_exchange.client.is_company_client:
-                old_balance_before_final = old_balance
                 # If old_balance is already greater than current_balance, keep it (it's correct)
                 # Only override if old_balance equals current_balance AND total_funding > current_balance
                 if old_balance <= current_balance and total_funding > current_balance:
                     # old_balance is wrong (equals current), but total_funding is correct, use it
                     old_balance = total_funding
-                    if debug_a1:
-                        print(f"  After final check (line 2557): {old_balance_before_final} -> {old_balance}")
-                elif debug_a1:
-                    print(f"  Final check skipped (old_balance={old_balance_before_final} > current={current_balance})")
                 # If old_balance > current_balance, keep it (it's already correct, don't override with total_funding)
             
             # Skip clients where old_balance and current_balance are essentially the same
             # But allow very small differences to show (changed threshold to 0.001 to catch more cases)
-            debug_a1 = client_exchange.client.name == 'a1'
             if abs(old_balance - current_balance) < Decimal("0.001"):
-                if debug_a1:
-                    print(f"  ⚠️ SKIPPING: old_balance ({old_balance}) too close to current_balance ({current_balance})")
                 continue
-            elif debug_a1:
-                print(f"  ✅ NOT SKIPPING: difference is {abs(old_balance - current_balance)}")
             
             # Calculate percentages for CSV - ALWAYS fetch from ClientExchange (source of truth)
             my_share_pct = client_exchange.my_share_pct or Decimal(0)
@@ -2745,20 +2776,6 @@ def export_pending_csv(request):
             # CRITICAL: This MUST always be final_old_balance - final_current_balance
             # If Old Balance shows 100 and Current Balance shows 10, Total Loss MUST be 90
             # Calculate directly from the final values - no conditions, no overrides
-            total_loss = final_old_balance - final_current_balance
-            
-            # ABSOLUTE FIX: The calculation above should always be correct
-            # But if for some reason it's 0 when there's a difference, force recalculation
-            # This should never happen, but it's a safety net
-            if abs(final_old_balance - final_current_balance) > Decimal("0.01"):
-                # There's a clear difference, ensure total_loss reflects it
-                total_loss = final_old_balance - final_current_balance
-            
-            # Show both positive and negative values (no need to clamp to 0)
-            
-            # FINAL CALCULATION: Calculate total_loss directly from the values we're displaying
-            # This ensures total_loss always matches: Old Balance - Current Balance
-            # If Old Balance = 100 and Current Balance = 10, Total Loss MUST be 90
             total_loss_final = final_old_balance - final_current_balance
             
             # CRITICAL SAFETY CHECK: If old_balance and current_balance are different,
@@ -2766,42 +2783,6 @@ def export_pending_csv(request):
             if abs(final_old_balance - final_current_balance) > Decimal("0.01") and abs(total_loss_final) < Decimal("0.01"):
                 # There's a clear difference but total_loss is 0 - this is a bug, force recalculation
                 total_loss_final = final_old_balance - final_current_balance
-                debug_a1 = client_exchange.client.name == 'a1'
-                if debug_a1:
-                    print(f"  ⚠️ WARNING: total_loss was 0 but difference exists! Forcing recalculation: {total_loss_final}")
-            
-            # DEBUG: Print values for client 'a1' to verify calculation
-            if client_exchange.client.name == 'a1':
-                print(f"\n🔍 DEBUG FINAL for client 'a1':")
-                print(f"  final_old_balance: {final_old_balance}")
-                print(f"  final_current_balance: {final_current_balance}")
-                print(f"  total_loss_final: {total_loss_final}")
-                print(f"  old_balance (before final): {old_balance}")
-                print(f"  current_balance (before final): {current_balance}")
-                print(f"  Adding to clients_owe_list with total_loss={total_loss_final}")
-                
-                # Verify the dictionary entry
-                item_dict = {
-                    "client_code": client_exchange.client.code,
-                    "client_name": client_exchange.client.name,
-                    "exchange_name": client_exchange.exchange.name,
-                    "old_balance": final_old_balance,
-                    "current_balance": final_current_balance,
-                    "exchange_balance": final_current_balance,
-                    "total_loss": total_loss_final,
-                }
-                print(f"  Dictionary entry total_loss: {item_dict['total_loss']}")
-                print(f"🔍 DEBUG END for 'a1'\n")
-            
-            # FINAL VERIFICATION: Ensure total_loss is never 0 when there's a clear difference
-            # This is a critical safety check to prevent display issues
-            if abs(final_old_balance - final_current_balance) > Decimal("0.01"):
-                # There's a clear difference, total_loss MUST reflect it
-                if abs(total_loss_final) < Decimal("0.01"):
-                    # Something went wrong - force recalculation
-                    total_loss_final = final_old_balance - final_current_balance
-                    if client_exchange.client.name == 'a1':
-                        print(f"  ⚠️ CRITICAL: total_loss was 0 but difference exists! Forced to: {total_loss_final}")
             
             clients_owe_list.append({
                 "client_code": client_exchange.client.code,
@@ -2819,11 +2800,6 @@ def export_pending_csv(request):
                 "is_company_client": client_exchange.client.is_company_client,
             })
             
-            # Final debug verification for 'a1'
-            if client_exchange.client.name == 'a1':
-                last_item = clients_owe_list[-1]
-                print(f"  ✅ VERIFIED: Last item in list has total_loss={last_item['total_loss']}")
-                print(f"     old_balance={last_item['old_balance']}, current_balance={last_item['current_balance']}")
             continue
         
         # Clients where you owe them (profit case)
