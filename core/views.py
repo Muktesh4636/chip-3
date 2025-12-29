@@ -117,8 +117,8 @@ def get_old_balance_after_settlement(client_exchange, as_of_date=None):
     last_settlement = settlement_query.order_by("-date", "-created_at").first()
     
     if last_settlement:
-        # Settlement exists - Old Balance RESETS to Current Exchange Balance at settlement time
-        # 🔒 KEY RULE: Payment = closing the book → Old Balance becomes the current balance
+        # Settlement exists - Old Balance RESETS to reflect the settlement
+        # 🔒 KEY RULE: Payment = closing the book → Old Balance moves forward
         
         # 🚨 CRITICAL FIX: Use cached_old_balance from ClientExchange as PRIMARY source
         # This is updated during settlement and is the single source of truth
@@ -126,51 +126,64 @@ def get_old_balance_after_settlement(client_exchange, as_of_date=None):
         # 
         # The cached_old_balance is updated in settle_payment() and reflects the Old Balance after the last settlement
         # This prevents multiple same-day payments from creating conflicting states
+        # 
+        # 🔑 CORRECT APPROACH: Use cached_old_balance if available and recent
+        # Only recalculate from history if cache is missing or stale (for backward compatibility)
         
-        # 🚨 CRITICAL FIX: Always recalculate Old Balance from settlement history
-        # DO NOT trust cached_old_balance - it may be wrong from old code
-        # The correct approach: Start from funding, apply each settlement in order
-        # This ensures we get the correct Old Balance even if cache is wrong
+        # Check if cached_old_balance exists and is recent (updated within last 24 hours)
+        use_cached = False
+        if client_exchange.cached_old_balance is not None and client_exchange.balance_last_updated:
+            from datetime import timedelta
+            cache_age = timezone.now() - client_exchange.balance_last_updated
+            if cache_age < timedelta(hours=24):
+                # Cache is recent - use it as primary source
+                use_cached = True
+                base_old_balance = client_exchange.cached_old_balance
+                base_old_balance = base_old_balance.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
         
-        # Step 1: Start with total funding up to settlement date
-        total_funding_up_to_settlement = Transaction.objects.filter(
-            client_exchange=client_exchange,
-            transaction_type=Transaction.TYPE_FUNDING,
-            date__lte=last_settlement.date
-        ).aggregate(total=Sum("amount"))["total"] or Decimal(0)
-        
-        # Step 2: Get all settlements up to and including this settlement, in order
-        all_settlements = Transaction.objects.filter(
-            client_exchange=client_exchange,
-            transaction_type=Transaction.TYPE_SETTLEMENT,
-            date__lte=last_settlement.date
-        ).order_by("date", "created_at")  # Order by date, then created_at for deterministic ordering
-        
-        # Step 3: Get share percentage for capital_closed calculation
-        if client_exchange.client.is_company_client:
-            total_pct = client_exchange.company_share_pct or Decimal(0)
-        else:
-            total_pct = client_exchange.my_share_pct or Decimal(0)
-        
-        # Step 4: Apply each settlement to move Old Balance
-        base_old_balance = total_funding_up_to_settlement
-        
-        for settlement in all_settlements:
-            # Only process settlements where client pays (your_share_amount > 0) or you pay (client_share_amount > 0)
-            if settlement.your_share_amount > 0:
-                # Client pays you (loss case) - old_balance decreases
-                payment_amount = settlement.amount
-                if total_pct > 0:
-                    capital_closed = (payment_amount * Decimal(100)) / total_pct
-                    base_old_balance = base_old_balance - capital_closed
-            elif settlement.client_share_amount > 0:
-                # You pay client (profit case) - old_balance increases
-                payment_amount = settlement.amount
-                if total_pct > 0:
-                    capital_closed = (payment_amount * Decimal(100)) / total_pct
-                    base_old_balance = base_old_balance + capital_closed
-        
-        base_old_balance = base_old_balance.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+        if not use_cached:
+            # Cache is missing or stale - recalculate from settlement history (fallback only)
+            # This should only happen for old data or if cache was cleared
+            
+            # Step 1: Start with total funding up to settlement date
+            total_funding_up_to_settlement = Transaction.objects.filter(
+                client_exchange=client_exchange,
+                transaction_type=Transaction.TYPE_FUNDING,
+                date__lte=last_settlement.date
+            ).aggregate(total=Sum("amount"))["total"] or Decimal(0)
+            
+            # Step 2: Get all settlements up to and including this settlement, in order
+            all_settlements = Transaction.objects.filter(
+                client_exchange=client_exchange,
+                transaction_type=Transaction.TYPE_SETTLEMENT,
+                date__lte=last_settlement.date
+            ).order_by("date", "created_at")  # Order by date, then created_at for deterministic ordering
+            
+            # Step 3: Get share percentage for capital_closed calculation
+            if client_exchange.client.is_company_client:
+                total_pct = client_exchange.company_share_pct or Decimal(0)
+            else:
+                total_pct = client_exchange.my_share_pct or Decimal(0)
+            
+            # Step 4: Apply each settlement to move Old Balance
+            base_old_balance = total_funding_up_to_settlement
+            
+            for settlement in all_settlements:
+                # Only process settlements where client pays (your_share_amount > 0) or you pay (client_share_amount > 0)
+                if settlement.your_share_amount > 0:
+                    # Client pays you (loss case) - old_balance decreases
+                    payment_amount = settlement.amount
+                    if total_pct > 0:
+                        capital_closed = (payment_amount * Decimal(100)) / total_pct
+                        base_old_balance = base_old_balance - capital_closed
+                elif settlement.client_share_amount > 0:
+                    # You pay client (profit case) - old_balance increases
+                    payment_amount = settlement.amount
+                    if total_pct > 0:
+                        capital_closed = (payment_amount * Decimal(100)) / total_pct
+                        base_old_balance = base_old_balance + capital_closed
+            
+            base_old_balance = base_old_balance.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
         
         # 🚨 CRITICAL: Validate the recalculated base_old_balance makes sense
         # If it's negative or None, fallback to BALANCE_RECORD (for backward compatibility)
@@ -1374,20 +1387,21 @@ def settle_payment(request):
                     # 🔹 STEP 4: MOVE OLD BALANCE
                     # 🚨 CRITICAL: For LOSS case (net_profit < 0), old_balance decreases
                     # We already validated net_profit < 0 above, so this is always loss case
+                    # 
+                    # 🔑 CORRECT RULE: Old Balance moves TOWARDS Current Balance, but never crosses it
+                    # Old Balance New = max(Old Balance - capital_closed, Current Balance)
+                    # This ensures Old Balance never goes below Current Balance (which would create fake profit)
                     old_balance_new = old_balance - capital_closed
                     old_balance_new = old_balance_new.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
                     
                     # 🔒 CRITICAL SAFETY CHECK: Old Balance must NEVER cross Current Balance
                     # This prevents fake profit/loss creation from multiple same-day payments
+                    # If Old Balance would cross Current Balance, clamp it to Current Balance
                     if old_balance_new < current_balance:
-                        # Old Balance crossed Current Balance - this creates fake profit
-                        # This should NEVER happen if pending validation is correct
-                        from django.contrib import messages
-                        messages.error(request, f"Cannot record payment: Settlement would create invalid state (old_balance: ₹{old_balance_new} < current_balance: ₹{current_balance}). This may indicate multiple payments on the same day. Please record payments one at a time.")
-                        redirect_url = f"?section=clients-owe&report_type={report_type}"
-                        if client_type_filter and client_type_filter != 'all':
-                            redirect_url += f"&client_type={client_type_filter}"
-                        return redirect(reverse("pending:summary") + redirect_url)
+                        # Old Balance would cross Current Balance - clamp to Current Balance
+                        # This means the settlement fully closes the loss
+                        old_balance_new = current_balance
+                        # Note: This will result in pending_new = 0, which is correct
                     
                     # 🔹 STEP 5: CURRENT BALANCE NEVER CHANGES (already set above)
                     
@@ -1575,8 +1589,21 @@ def settle_payment(request):
                     # 🔹 STEP 4: MOVE OLD BALANCE (PROFIT CASE)
                     # 🚨 CRITICAL: For PROFIT case (net_profit > 0), old_balance INCREASES
                     # This is the OPPOSITE of loss case
+                    # 
+                    # 🔑 CORRECT RULE: Old Balance moves AWAY from Current Balance (increases)
+                    # Old Balance New = Old Balance + capital_closed
+                    # This is correct because profit settlements increase the capital base
                     old_balance_new = old_balance + capital_closed
                     old_balance_new = old_balance_new.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+                    
+                    # 🔒 CRITICAL SAFETY CHECK: Old Balance should not exceed Current Balance by too much
+                    # In profit case, Old Balance can be less than Current Balance (that's the profit)
+                    # But if Old Balance exceeds Current Balance after settlement, it means we've overpaid
+                    # This should be prevented by validation (payment <= pending), but add safety check
+                    if old_balance_new > current_balance:
+                        # This means we've paid more than the profit - should not happen with proper validation
+                        # But if it does, clamp to Current Balance (fully paid)
+                        old_balance_new = current_balance
                     
                     # 🔹 STEP 5: CURRENT BALANCE NEVER CHANGES (already set above)
                     

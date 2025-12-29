@@ -666,3 +666,4 @@ Pending New = (Abs(Current - Old Balance New) × Share %) / 100
 **Last Updated:** 2025-12-29  
 **Version:** 2.0
 
+
