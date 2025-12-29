@@ -1268,28 +1268,19 @@ def settle_payment(request):
                         return redirect(reverse("pending:summary") + redirect_url)
                     
                     # Calculate share_amount (stateless - from net_profit)
+                    # 🚨 CRITICAL: share_amount is calculated from the CURRENT state (old_balance and current_balance)
+                    # Since settlements move Old Balance forward, share_amount already reflects all previous settlements
+                    # Therefore, share_amount IS the pending amount - we should NOT subtract settlements again
                     share_amount = (abs_profit * total_pct) / Decimal(100)
                     share_amount = share_amount.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
                     
-                    # Calculate settlements_so_far
-                    if net_profit < 0:
-                        # LOSS CASE: Client pays you
-                        settlements_so_far = Transaction.objects.filter(
-                                client_exchange=client_exchange,
-                                transaction_type=Transaction.TYPE_SETTLEMENT,
-                                client_share_amount=0,
-                                your_share_amount__gt=0
-                        ).aggregate(total=Sum("your_share_amount"))["total"] or Decimal(0)
-                    else:
-                        # PROFIT CASE: You pay client
-                        settlements_so_far = Transaction.objects.filter(
-                            client_exchange=client_exchange,
-                            transaction_type=Transaction.TYPE_SETTLEMENT,
-                            client_share_amount__gt=0,
-                            your_share_amount=0
-                        ).aggregate(total=Sum("client_share_amount"))["total"] or Decimal(0)
-                    
-                    pending_before = share_amount - settlements_so_far
+                    # 🚨 CRITICAL: Pending is simply the share_amount (stateless calculation)
+                    # Settlements are already reflected in Old Balance movement, so share_amount is already the correct pending
+                    # We do NOT need to subtract settlements_so_far because:
+                    # 1. Old Balance has been moved forward by previous settlements
+                    # 2. share_amount is recalculated from the new Old Balance
+                    # 3. Therefore, share_amount = current pending amount
+                    pending_before = share_amount
                     pending_before = max(Decimal(0), pending_before)
                     
                     # 🔒 HARD SAFETY RULES
@@ -2242,7 +2233,7 @@ def pending_summary(request):
                 "current_balance": current_balance,  # Current balance (for total_loss calculation)
                 "exchange_balance": current_balance,  # Current balance (renamed for clarity)
                 "total_loss": total_loss,  # Total Loss = Old Balance - Current Balance (100% loss)
-                "pending_amount": my_share,  # Pending amount (client owes you) - calculated from Total Loss × My Share %
+                "pending_amount": combined_share if client_exchange.client.is_company_client else my_share,  # Pending amount (client owes you) - For company clients: Combined Share (10% of loss); For my clients: My Share (1% of loss)
                 "company_pending": company_share if client_exchange.client.is_company_client else Decimal(0),  # Company share pending
                 "your_earnings": your_earnings,  # Your earnings from company split (1% of losses + 1% of profits)
                 "my_share": my_share,  # Admin's share of loss (admin earns this) - AFTER payments
@@ -2434,6 +2425,9 @@ def pending_summary(request):
             if should_show:
                 # Get old_balance and current_balance for display
                 if client_exchange.client.is_company_client:
+                    # 🚨 CRITICAL: For company clients, use get_old_balance_after_settlement
+                    # This correctly calculates: balance_at_last_settlement + funding_after_settlement
+                    # NOT total_funding (which would ignore settlements)
                     old_balance = get_old_balance_after_settlement(client_exchange)
                     current_balance = profit_loss_data["exchange_balance"]
                 # For my clients, old_balance and current_balance are already calculated above
@@ -2453,9 +2447,11 @@ def pending_summary(request):
                 
                 # Calculate Total Profit = Old Balance - Current Balance
                 # Negative = profit (you owe client), Positive = loss (client owes you)
-                total_funding = profit_loss_data["total_funding"]
+                # 🚨 CRITICAL: Use old_balance (from get_old_balance_after_settlement), NOT total_funding
+                # total_funding ignores settlements and would show wrong Old Balance (e.g., ₹300 instead of ₹240)
+                total_funding = profit_loss_data["total_funding"]  # Only for reference/display, NOT for calculation
                 exchange_balance = profit_loss_data["exchange_balance"]
-                total_profit = old_balance - exchange_balance
+                total_profit = old_balance - exchange_balance  # ✅ CORRECT: Uses old_balance (₹240), not total_funding (₹300)
                 
                 # Recalculate Combined Share from Total Profit × Share %
                 # For company clients: Combined Share = Total Profit × Company Share % (10%)
@@ -2747,22 +2743,15 @@ def export_pending_csv(request):
                     print(f"  total_funding_for_old: {total_funding_for_old}")
                     print(f"  net_client_tally: {net_client_tally}")
                 
-                # If there's a loss (net_client_tally > 0) and total funding > current balance,
-                # use total funding as old_balance to show the actual loss
-                if net_client_tally > 0 and total_funding_for_old > current_balance:
-                    old_balance_before = old_balance
-                    old_balance = total_funding_for_old
-                    if debug_a1:
-                        print(f"  After check 1 (net_client_tally > 0): {old_balance_before} -> {old_balance}")
-                # If old_balance from settlement is less than or equal to current_balance,
-                # but total funding exists and is greater, use total funding
-                elif old_balance <= current_balance and total_funding_for_old > current_balance:
-                    old_balance_before = old_balance
-                    old_balance = total_funding_for_old
-                    if debug_a1:
-                        print(f"  After check 2 (old_balance <= current): {old_balance_before} -> {old_balance}")
-                elif debug_a1:
-                    print(f"  Checks 1 & 2 skipped")
+                # 🚨 CRITICAL: DO NOT override old_balance with total_funding if settlements exist
+                # The old_balance from get_old_balance_after_settlement is ALWAYS correct when settlements exist
+                # Overriding it with total_funding would ignore settlements and cause incorrect calculations
+                # This was the root cause of showing Old Balance = ₹300 instead of ₹240
+                # 
+                # ✅ CORRECT: old_balance = balance_at_last_settlement + funding_after_settlement
+                # ❌ WRONG: old_balance = total_funding (ignores settlements)
+                if debug_a1:
+                    print(f"  Old Balance from settlement: {old_balance} (NOT overriding with total_funding={total_funding_for_old})")
             
             # Get the raw amounts from net_tallies for company clients
             if client_exchange.client.is_company_client:
@@ -2796,19 +2785,20 @@ def export_pending_csv(request):
                         old_balance = current_balance
             
             # For company clients, prioritize old_balance if it's greater than current_balance
-            # Only use total_funding if old_balance is wrong (equals current_balance) but total_funding is higher
+            # 🚨 CRITICAL: DO NOT override old_balance with total_funding if settlements exist
+            # The old_balance from get_old_balance_after_settlement is ALWAYS correct when settlements exist
+            # Overriding it with total_funding would ignore settlements and cause incorrect calculations
+            # This was the root cause of showing Old Balance = ₹300 instead of ₹240
+            # 
+            # ✅ CORRECT: old_balance = balance_at_last_settlement + funding_after_settlement
+            # ❌ WRONG: old_balance = total_funding (ignores settlements)
             debug_a1 = client_exchange.client.name == 'a1'
             if client_exchange.client.is_company_client:
                 old_balance_before_final = old_balance
-                # If old_balance is already greater than current_balance, keep it (it's correct)
-                # Only override if old_balance equals current_balance AND total_funding > current_balance
-                if old_balance <= current_balance and total_funding > current_balance:
-                    # old_balance is wrong (equals current), but total_funding is correct, use it
-                    old_balance = total_funding
-                    if debug_a1:
-                        print(f"  After final check (line 2557): {old_balance_before_final} -> {old_balance}")
-                elif debug_a1:
-                    print(f"  Final check skipped (old_balance={old_balance_before_final} > current={current_balance})")
+                # DO NOT override old_balance with total_funding - settlements must be respected
+                # The old_balance from get_old_balance_after_settlement is the source of truth
+                if debug_a1:
+                    print(f"  Final check: Keeping old_balance={old_balance_before_final} (NOT overriding with total_funding={total_funding})")
                 # If old_balance > current_balance, keep it (it's already correct, don't override with total_funding)
             
             # Skip clients where old_balance and current_balance are essentially the same

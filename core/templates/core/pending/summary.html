@@ -851,7 +851,7 @@
                 <th>Client Code</th>
                 <th>Client Name</th>
                 <th>Exchange</th>
-                <th style="text-align: right;">Total Funding</th>
+                <th style="text-align: right;">Old Balance</th>
                 <th style="text-align: right;">Exchange Balance</th>
                 <th style="text-align: right;">Total Profit</th>
                 <th class="share-header my-share-header">My Amount</th>
@@ -887,7 +887,7 @@
                         </a>
                     </td>
                     <td>{{ item.exchange_name }}</td>
-                    <td style="text-align: right;">₹{{ item.total_funding|floatformat:1 }}</td>
+                    <td style="text-align: right;">₹{{ item.old_balance|floatformat:1 }}</td>
                     <td style="text-align: right;">₹{{ item.exchange_balance|floatformat:1 }}</td>
                     <td style="text-align: right;">₹{{ item.total_profit|default:0|floatformat:1 }}</td>
                     <td class="share-cell my-share-amount-cell" data-my-share="{{ item.my_share|default:0 }}" data-company-share="{{ item.company_share|default:0 }}" data-combined-share="{{ item.combined_share|default:0 }}">
