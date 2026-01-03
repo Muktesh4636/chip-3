@@ -223,7 +223,7 @@
         <div class="stat-box profit">
         <div class="stat-label">Your Total Profit</div>
         <div class="stat-value">₹ {{ your_total_profit|default:0|floatformat:1 }}</div>
-        <div class="stat-note">Your share from profits</div>
+        <div class="stat-note">Your net earnings (income from losses - expense from profits)</div>
     </div>
     {% if client_type_filter != 'my' %}
         <div class="stat-box profit">

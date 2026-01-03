@@ -1395,12 +1395,7 @@ def settle_payment(request):
                         return redirect(reverse("pending:summary") + redirect_url)
                     
                     # 🔹 STEP 3: CONVERT PAYMENT → CAPITAL CLOSED
-                    # 🚨 CRITICAL FIX: For ALL clients (my clients and company clients), payments are ALWAYS against the share percentage
-                    # For company clients: Payment is ALWAYS against combined share (10%), not my share (1%)
-                    # The split between my share (1%) and company share (9%) is for internal accounting only
-                    # 
-                    # Formula: capital_closed = payment × 100 / share_pct
-                    # 
+                    # 📘 Settlement Logic: capital_closed = payment × 100 / share_pct
                     # For my clients: share_pct = my_share_pct (e.g., 10%)
                     # For company clients: share_pct = company_share_pct (e.g., 10%)
                     # 
@@ -1410,45 +1405,42 @@ def settle_payment(request):
                     
                     capital_closed = capital_closed.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
                     
-                    # 🔹 STEP 4: MOVE OLD BALANCE
-                    # 🚨 CRITICAL: For LOSS case (net_profit < 0), old_balance decreases
-                    # We already validated net_profit < 0 above, so this is always loss case
-                    # 
-                    # 🔑 CORRECT RULE: Old Balance moves TOWARDS Current Balance, but never crosses it
-                    # Old Balance New = max(Old Balance - capital_closed, Current Balance)
+                    # 🔹 STEP 4: UPDATE OLD BALANCE
+                    # 📘 LOSS Case (NET < 0): OB_new = OB - capital_closed
+                    # 📘 Clamp Rule: OB_new = max(OB_new, CB)
+                    # Old Balance moves TOWARDS Current Balance, but never crosses it
                     # This ensures Old Balance never goes below Current Balance (which would create fake profit)
                     old_balance_new = old_balance - capital_closed
                     old_balance_new = old_balance_new.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
                     
                     # 🔒 CRITICAL SAFETY CHECK: Old Balance must NEVER cross Current Balance
-                    # This prevents fake profit/loss creation from multiple same-day payments
                     # If Old Balance would cross Current Balance, clamp it to Current Balance
                     if old_balance_new < current_balance:
-                        # Old Balance would cross Current Balance - clamp to Current Balance
-                        # This means the settlement fully closes the loss
                         old_balance_new = current_balance
-                        # Note: This will result in pending_new = 0, which is correct
+                        # Note: This will result in pending_new = 0, which triggers closure rule
                     
                     # 🔹 STEP 5: CURRENT BALANCE NEVER CHANGES (already set above)
                     
-                    # 🔹 STEP 6: RECALCULATE NET PROFIT (AFTER RESET)
-                    net_profit_new = current_balance - old_balance_new
-                    abs_profit_new = abs(net_profit_new)
+                    # 🔹 STEP 6: RECALCULATE NET (AFTER SETTLEMENT)
+                    # 📘 NET_new = CB - OB_new
+                    net_new = current_balance - old_balance_new
+                    movement_new = abs(net_new)
                     
                     # 🔹 STEP 7: RECALCULATE SHARE (STATELESS)
-                    share_new = (abs_profit_new * total_pct) / Decimal(100)
+                    # 📘 Share Calculation: share_new = movement_new × share_pct / 100
+                    share_new = (movement_new * total_pct) / Decimal(100)
                     share_new = share_new.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
                     
                     # 🔹 STEP 8: RECALCULATE PENDING (STATELESS)
-                    # 🚨 CRITICAL: Settlement is already reflected by moving Old Balance
+                    # 📘 Pending = Share Amount (CRITICAL RULE)
+                    # Settlement is already reflected by moving Old Balance
                     # So pending is simply the new share amount - DO NOT subtract settlement again
-                    # 
-                    # Correct flow: Settlement → move Old Balance → recompute loss → recompute share → that IS pending
-                    # Wrong flow: Settlement → move Old Balance → recompute share → subtract settlement again ❌
                     pending_new = share_new
                     pending_new = max(Decimal(0), pending_new)
                     
-                    # 🔒 Rule 4: If pending becomes 0 → hard reset (align Old Balance with Current Balance)
+                    # 🔒 CLOSURE RULE (Hard Stop)
+                    # 📘 If pending_new <= 0.01: OB_new = CB, pending_new = 0
+                    # Client must disappear from pending list
                     if pending_new <= Decimal("0.01"):
                         old_balance_new = current_balance
                         pending_new = Decimal(0)
@@ -1584,11 +1576,11 @@ def settle_payment(request):
                             redirect_url += f"&client_type={client_type_filter}"
                         return redirect(reverse("pending:summary") + redirect_url)
                     
-                    # Calculate share_amount (stateless - from net_profit)
-                    share_amount = (abs_profit * total_pct) / Decimal(100)
+                    # 📘 Share Calculation: share_amount = movement × share_pct / 100
+                    share_amount = (movement * total_pct) / Decimal(100)
                     share_amount = share_amount.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
                     
-                    # Pending is the share_amount (what you owe client)
+                    # 📘 Pending = Share Amount (CRITICAL RULE)
                     pending_before = share_amount
                     
                     # 🔒 HARD SAFETY RULES (MANDATORY - NO EXCEPTIONS)
@@ -1628,46 +1620,41 @@ def settle_payment(request):
                         return redirect(reverse("pending:summary") + redirect_url)
                     
                     # 🔹 STEP 3: CONVERT PAYMENT → CAPITAL CLOSED
-                    # capital_closed = payment × 100 / total_pct
+                    # 📘 Settlement Logic: capital_closed = payment × 100 / share_pct
                     capital_closed = (amount * Decimal(100)) / total_pct
                     capital_closed = capital_closed.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
                     
-                    # 🔹 STEP 4: MOVE OLD BALANCE (PROFIT CASE)
-                    # 🚨 CRITICAL: For PROFIT case (net_profit > 0), old_balance INCREASES
-                    # This is the OPPOSITE of loss case
-                    # 
-                    # 🔑 CORRECT RULE: Old Balance moves AWAY from Current Balance (increases)
-                    # Old Balance New = Old Balance + capital_closed
-                    # This is correct because profit settlements increase the capital base
+                    # 🔹 STEP 4: UPDATE OLD BALANCE (PROFIT CASE)
+                    # 📘 PROFIT Case (NET > 0): OB_new = OB + capital_closed
+                    # 📘 Clamp Rule: OB_new = min(OB_new, CB)
+                    # Old Balance moves AWAY from Current Balance (increases)
                     old_balance_new = old_balance + capital_closed
                     old_balance_new = old_balance_new.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
                     
-                    # 🔒 CRITICAL SAFETY CHECK: Old Balance should not exceed Current Balance by too much
-                    # In profit case, Old Balance can be less than Current Balance (that's the profit)
-                    # But if Old Balance exceeds Current Balance after settlement, it means we've overpaid
-                    # This should be prevented by validation (payment <= pending), but add safety check
+                    # 🔒 CRITICAL SAFETY CHECK: Old Balance should not exceed Current Balance
+                    # If Old Balance exceeds Current Balance, clamp to Current Balance (fully paid)
                     if old_balance_new > current_balance:
-                        # This means we've paid more than the profit - should not happen with proper validation
-                        # But if it does, clamp to Current Balance (fully paid)
                         old_balance_new = current_balance
                     
                     # 🔹 STEP 5: CURRENT BALANCE NEVER CHANGES (already set above)
                     
-                    # 🔹 STEP 6: RECALCULATE NET PROFIT (AFTER RESET)
-                    net_profit_new = current_balance - old_balance_new
-                    abs_profit_new = abs(net_profit_new)
+                    # 🔹 STEP 6: RECALCULATE NET (AFTER SETTLEMENT)
+                    # 📘 NET_new = CB - OB_new
+                    net_new = current_balance - old_balance_new
+                    movement_new = abs(net_new)
                     
                     # 🔹 STEP 7: RECALCULATE SHARE (STATELESS)
-                    share_new = (abs_profit_new * total_pct) / Decimal(100)
+                    # 📘 Share Calculation: share_new = movement_new × share_pct / 100
+                    share_new = (movement_new * total_pct) / Decimal(100)
                     share_new = share_new.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
                     
                     # 🔹 STEP 8: RECALCULATE PENDING (STATELESS)
-                    # 🚨 CRITICAL: Settlement is already reflected by moving Old Balance
-                    # So pending is simply the new share amount - DO NOT subtract settlement again
+                    # 📘 Pending = Share Amount (CRITICAL RULE)
                     pending_new = share_new
                     pending_new = max(Decimal(0), pending_new)
                     
-                    # 🔒 Rule 4: If pending becomes 0 → hard reset (align Old Balance with Current Balance)
+                    # 🔒 CLOSURE RULE (Hard Stop)
+                    # 📘 If pending_new <= 0.01: OB_new = CB, pending_new = 0
                     if pending_new <= Decimal("0.01"):
                         old_balance_new = current_balance
                         pending_new = Decimal(0)
@@ -2208,13 +2195,18 @@ def pending_summary(request):
         profit_loss_data = calculate_client_profit_loss(client_exchange)
         client_profit_loss = profit_loss_data["client_profit_loss"]
         
-        # Clients with net tally > 0 (client owes you)
-        # 📘 PENDING AMOUNT (Client Owes You) = Σ (Your Share from LOSS transactions) − Σ (Settlements received)
+        # 📘 PENDING PAYMENTS SYSTEM (Single Source of Truth)
         # 
-        # Rule: Profit does NOT reduce pending
-        # Rule: Balance records do NOT affect pending
-        # Rule: Funding does NOT affect pending
-        # Rule: Only LOSS transactions and SETTLEMENT transactions affect pending
+        # Core Definitions:
+        # - OB (Old Balance): Capital base, moves ONLY when settlement happens
+        # - CB (Current Balance): Actual exchange balance from latest BALANCE_RECORD
+        # - NET = CB - OB: NET < 0 = Loss, NET > 0 = Profit
+        # - Pending = Share Amount: Always calculated statelessly from OB & CB
+        # 
+        # ❌ DO NOT subtract settlements from pending
+        # ❌ DO NOT accumulate pending
+        # ❌ DO NOT store pending
+        # ✅ Pending is always derived fresh from OB & CB
         
         # 📘 CLIENTS OWE YOU (Loss only) - This section is ONLY for LOSSES
         # Rule: Must NEVER show profits (money you owe the client)
@@ -3603,12 +3595,36 @@ def report_overview(request):
     
     # Overall totals (filtered by time travel if applicable)
     total_turnover = base_qs.aggregate(total=Sum("amount"))["total"] or 0
-    your_total_profit = (
+    
+    # 📘 YOUR TOTAL PROFIT Calculation
+    # For company clients: your_share_amount = 1% of profit (in profit transactions)
+    # For my clients: your_share_amount = full share of profit (in profit transactions)
+    # This represents what you OWE clients (expense)
+    your_total_profit_from_profits = (
         base_qs.filter(transaction_type=Transaction.TYPE_PROFIT).aggregate(total=Sum("your_share_amount"))[
             "total"
         ]
         or 0
     )
+    
+    # 📘 YOUR TOTAL INCOME from Losses
+    # For company clients: your_share_amount = 1% of loss (in loss transactions)
+    # For my clients: your_share_amount = full share of loss (in loss transactions)
+    # This represents what clients OWE you (income)
+    your_total_income_from_losses = (
+        base_qs.filter(transaction_type=Transaction.TYPE_LOSS).aggregate(total=Sum("your_share_amount"))[
+            "total"
+        ]
+        or 0
+    )
+    
+    # 📘 YOUR NET PROFIT = Income from Losses - Expense from Profits
+    # This shows your actual earnings (positive = you earned, negative = you owe)
+    your_total_profit = your_total_income_from_losses - your_total_profit_from_profits
+    
+    # 📘 COMPANY PROFIT Calculation
+    # Sum of company_share_amount from ALL transactions (both profit and loss)
+    # For company clients: company_share_amount = 9% of movement
     company_profit = (
         base_qs.aggregate(total=Sum("company_share_amount"))["total"] or 0
     )
