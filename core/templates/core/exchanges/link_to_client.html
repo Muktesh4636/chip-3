@@ -16,41 +16,33 @@
     
     <form method="post">
         {% csrf_token %}
-        {% if form.errors %}
-            <div style="background: #fee2e2; color: #991b1b; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #dc2626;">
-                {% for field, errors in form.errors.items %}
-                    {% for error in errors %}
-                        <div>{{ error }}</div>
-                    {% endfor %}
-                {% endfor %}
-            </div>
-        {% endif %}
         
         <div class="form-row">
             <label class="field-label">Client *</label>
-            {{ form.client }}
-            {% if form.client.errors %}
-                <div style="color: var(--danger); font-size: 13px; margin-top: 4px;">{{ form.client.errors }}</div>
-            {% endif %}
+            <select name="client" class="field-input" required>
+                <option value="">-- Select Client --</option>
+                {% for client in clients %}
+                    <option value="{{ client.pk }}">{{ client.name }}{% if client.code %} ({{ client.code }}){% endif %}</option>
+                {% endfor %}
+            </select>
         </div>
         
         <div class="form-row">
             <label class="field-label">Exchange *</label>
-            {{ form.exchange }}
-            {% if form.exchange.errors %}
-                <div style="color: var(--danger); font-size: 13px; margin-top: 4px;">{{ form.exchange.errors }}</div>
-            {% endif %}
+            <select name="exchange" class="field-input" required>
+                <option value="">-- Select Exchange --</option>
+                {% for exchange in exchanges %}
+                    <option value="{{ exchange.pk }}">{{ exchange.name }}{% if exchange.code %} ({{ exchange.code }}){% endif %}</option>
+                {% endfor %}
+            </select>
         </div>
         
         <div class="form-row">
             <label class="field-label">My Total % *</label>
-            {{ form.my_percentage }}
+            <input type="number" name="my_percentage" class="field-input" min="0" max="100" required>
             <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">
                 Your total percentage share (0-100). Used for system logic.
             </div>
-            {% if form.my_percentage.errors %}
-                <div style="color: var(--danger); font-size: 13px; margin-top: 4px;">{{ form.my_percentage.errors }}</div>
-            {% endif %}
         </div>
         
         <div style="border-top: 1px solid var(--border); margin: 20px 0; padding-top: 20px;">
@@ -61,7 +53,7 @@
             
             <div class="form-row">
                 <label class="field-label">Friend % (Report Only)</label>
-                {{ form.friend_percentage }}
+                <input type="number" name="friend_percentage" class="field-input" min="0" max="100" placeholder="Leave blank if not needed">
                 <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">
                     Friend/Student percentage. Must equal: My Total % - My Own %
                 </div>
@@ -69,7 +61,7 @@
             
             <div class="form-row">
                 <label class="field-label">My Own % (Report Only)</label>
-                {{ form.my_own_percentage }}
+                <input type="number" name="my_own_percentage" class="field-input" min="0" max="100" placeholder="Leave blank if not needed">
                 <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">
                     Your own percentage. Friend % + My Own % must equal My Total %
                 </div>

@@ -5,14 +5,37 @@
 {% block page_subtitle %}Two separate sections: Clients owe you vs You owe clients{% endblock %}
 
 {% block content %}
+<!-- Search Bar -->
 <div style="background: var(--bg-content); border-radius: 8px; padding: 20px; border: 1px solid var(--border); margin-bottom: 24px;">
-    <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-        <button onclick="showSection('clients-owe')" id="btn-clients-owe" class="btn btn-primary" style="background: var(--accent);">
-        Clients Owe You
-    </button>
-        <button onclick="showSection('you-owe')" id="btn-you-owe" class="btn" style="background: var(--bg-content);">
-        You Owe Clients
-    </button>
+    <form method="get" style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 300px;">
+            <label style="display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px;">Search Client or Exchange</label>
+            <input type="text" name="search" class="field-input" value="{{ search_query }}" placeholder="Search by client name, code, or exchange name..." style="width: 100%;">
+        </div>
+        <div>
+            <button type="submit" class="btn btn-primary">Search</button>
+            {% if search_query %}
+                <a href="{% url 'pending_summary' %}" class="btn" style="margin-left: 8px;">Clear</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<div style="background: var(--bg-content); border-radius: 8px; padding: 20px; border: 1px solid var(--border); margin-bottom: 24px;">
+    <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: space-between;">
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <button onclick="showSection('clients-owe')" id="btn-clients-owe" class="btn btn-primary" style="background: var(--accent);">
+            Clients Owe You
+        </button>
+            <button onclick="showSection('you-owe')" id="btn-you-owe" class="btn" style="background: var(--bg-content);">
+            You Owe Clients
+        </button>
+        </div>
+        <div>
+            <a href="{% url 'export_pending_csv' %}{% if search_query %}?search={{ search_query|urlencode }}{% endif %}" class="btn btn-primary" style="background: var(--success);">
+                📥 Download CSV
+            </a>
+        </div>
     </div>
 </div>
 

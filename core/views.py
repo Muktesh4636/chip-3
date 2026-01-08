@@ -338,16 +338,36 @@ def dashboard(request):
 
 
 
+    # Get all accounts for the current user
+    all_accounts = ClientExchangeAccount.objects.filter(client__user=request.user).select_related("client", "exchange")
+    
+    # Calculate totals from accounts
+    total_funding = sum(account.funding for account in all_accounts)
+    total_exchange_balance = sum(account.exchange_balance for account in all_accounts)
+    total_client_pnl = sum(account.compute_client_pnl() for account in all_accounts)
+    total_my_share = sum(account.compute_my_share() for account in all_accounts)
+    
+    # Count totals
+    total_clients = Client.objects.filter(user=request.user).count()
+    total_exchanges = Exchange.objects.count()
+    total_accounts = all_accounts.count()
+    
+    # Get recent accounts (last 10 updated)
+    recent_accounts = all_accounts.order_by("-updated_at")[:10]
+    
     context = {
-
         "today": today,
-
+        "total_clients": total_clients,
+        "total_exchanges": total_exchanges,
+        "total_accounts": total_accounts,
+        "total_funding": total_funding,
+        "total_exchange_balance": total_exchange_balance,
+        "total_client_pnl": total_client_pnl,
+        "total_my_share": total_my_share,
+        "recent_accounts": recent_accounts,
         "total_turnover": total_turnover,
-
         "your_profit": your_profit,
-
         "company_profit": company_profit,
-
         "pending_clients_owe": pending_clients_owe,
         "pending_you_owe_clients": pending_you_owe_clients,
         "active_clients_count": active_clients_count,
@@ -443,31 +463,34 @@ def my_clients_list(request):
 @login_required
 
 
+@login_required
 def client_detail(request, pk):
-
-
     client = get_object_or_404(Client, pk=pk, user=request.user)
 
-    client_exchanges = client.exchange_accounts.select_related("exchange").all()
+    # Get all exchange accounts for this client
+    accounts = client.exchange_accounts.select_related("exchange").all()
+    
+    # Calculate totals
+    total_funding = sum(account.funding for account in accounts)
+    total_exchange_balance = sum(account.exchange_balance for account in accounts)
+    total_client_pnl = sum(account.compute_client_pnl() for account in accounts)
+    
     transactions = (
         Transaction.objects.filter(client_exchange__client=client)
         .select_related("client_exchange", "client_exchange__exchange")
         .order_by("-date", "-created_at")[:50]
     )
-    # Determine client type for URL namespace
-    client_type = "company" if False else "my"
+    
     return render(
         request,
         "core/clients/detail.html",
         {
             "client": client,
-            "client_exchanges": client_exchanges,
-            "inactive_client_exchanges": [],
-
+            "accounts": accounts,
+            "total_funding": total_funding,
+            "total_exchange_balance": total_exchange_balance,
+            "total_client_pnl": total_client_pnl,
             "transactions": transactions,
-
-            "client_type": client_type,
-
         },
     )
 
@@ -607,18 +630,37 @@ def settle_payment(request):
     from django.shortcuts import redirect
     from django.urls import reverse
     report_type = request.GET.get("report_type", "weekly")
-    return redirect(reverse("pending:summary") + f"?report_type={report_type}")
+    return redirect(reverse("pending_summary") + f"?report_type={report_type}")
 
 
 @login_required
 
 
+@login_required
 def client_create(request):
-
-
-    """Legacy view - redirects to appropriate create view based on context"""
-    # Default to my clients if no context
-    return redirect(reverse("clients:add_my"))
+    """Create a new client"""
+    if request.method == "POST":
+        name = request.POST.get("name", "").strip()
+        code = request.POST.get("code", "").strip()
+        referred_by = request.POST.get("referred_by", "").strip()
+        is_company_client = request.POST.get("is_company_client") == "on"
+        
+        if name:
+            Client.objects.create(
+                user=request.user,
+                name=name,
+                code=code if code else None,
+                referred_by=referred_by if referred_by else None,
+                is_company_client=is_company_client,
+            )
+            from django.contrib import messages
+            messages.success(request, f"Client '{name}' has been created successfully.")
+            return redirect(reverse("client_list"))
+        else:
+            from django.contrib import messages
+            messages.error(request, "Client name is required.")
+    
+    return render(request, "core/clients/create.html")
 
 
 @login_required
@@ -705,7 +747,7 @@ def client_delete(request, pk):
             from django.contrib import messages
             messages.success(request, f"Client '{client_name}' has been deleted permanently.")
             
-            return redirect(reverse("my_clients:list"))
+            return redirect(reverse("client_list"))
         except Exception as e:
             from django.contrib import messages
 
@@ -730,11 +772,11 @@ def client_delete(request, pk):
 
             messages.error(request, error_msg)
 
-            return redirect(reverse("my_clients:list"))
+            return redirect(reverse("client_list"))
 
     
     # If GET, show confirmation or redirect
-    return redirect(reverse("clients:detail", args=[client.pk]))
+    return redirect(reverse("client_detail", args=[client.pk]))
 
 
 @login_required
@@ -772,17 +814,25 @@ def transaction_list(request):
     # All clients are now "my clients" - no filtering needed
     
     if client_id:
-
-        pass
+        transactions = transactions.filter(client_exchange__client_id=client_id)
+    
     if exchange_id:
-
-        pass
+        transactions = transactions.filter(client_exchange__exchange_id=exchange_id)
+    
     if start_date_str:
-
-        pass
+        try:
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+            transactions = transactions.filter(date__gte=start_date)
+        except ValueError:
+            pass
+    
     if end_date_str:
-
-        pass
+        try:
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+            transactions = transactions.filter(date__lte=end_date)
+        except ValueError:
+            pass
+    
     if tx_type:
         # Filter transactions by type
         transactions = transactions.filter(type=tx_type)
@@ -793,7 +843,8 @@ def transaction_list(request):
             Q(client_exchange__client__name__icontains=search_query) |
             Q(client_exchange__client__code__icontains=search_query) |
             Q(client_exchange__exchange__name__icontains=search_query) |
-            Q(note__icontains=search_query)
+            Q(client_exchange__exchange__code__icontains=search_query) |
+            Q(notes__icontains=search_query)
         )
     
     transactions = transactions.order_by("-date", "-created_at")[:200]
@@ -868,11 +919,10 @@ def pending_summary(request):
     
     today = date.today()
     report_type = request.GET.get("report_type", "daily")  # daily, weekly, monthly
+    search_query = request.GET.get("search", "").strip()
     # Get client_type from GET (to update session) or from session
     client_type_filter = request.GET.get("client_type") or request.session.get('client_type_filter', 'all')
     if client_type_filter == '':
-
-    
         pass
     # Update session to preserve client_type_filter for navigation bar
     request.session['client_type_filter'] = client_type_filter
@@ -880,7 +930,7 @@ def pending_summary(request):
     
     # Calculate date range based on report type (always current date)
     if report_type == "daily":
-
+        start_date = today
         end_date = today
         date_range_label = f"Today ({today.strftime('%B %d, %Y')})"
     elif report_type == "weekly":
@@ -917,6 +967,15 @@ def pending_summary(request):
         client__user=request.user,
     ).select_related("client", "exchange").all()
     
+    # Filter by search query if provided
+    if search_query:
+        client_exchanges = client_exchanges.filter(
+            Q(client__name__icontains=search_query) |
+            Q(client__code__icontains=search_query) |
+            Q(exchange__name__icontains=search_query) |
+            Q(exchange__code__icontains=search_query)
+        )
+    
     # Filter by client type if specified
     # All clients are now my clients - no filter needed
     # client_exchanges already contains all clients
@@ -940,129 +999,86 @@ def pending_summary(request):
     you_owe_list = []  # I Need To Pay Clients
     
     for client_exchange in client_exchanges:
-        # This is where you'll calculate pending amounts for each client_exchange
+        # Compute Client_PnL using PIN-TO-PIN formula
+        client_pnl = client_exchange.compute_client_pnl()
         
-        # Placeholder: Determine if client owes you or you owe client
-        # TODO: Replace with your new logic
-        is_loss_case = False  # Placeholder - client owes you
-        is_profit_case = False  # Placeholder - you owe client
+        # Determine if client owes you or you owe client
+        is_loss_case = client_pnl < 0  # Client owes you (loss)
+        is_profit_case = client_pnl > 0  # You owe client (profit)
         
         if is_loss_case:
             # This is the "Clients Owe You" section
             
-            # Placeholder variables - replace with your calculations
-            pending_amount = Decimal(0)
-            old_balance = Decimal(0)
-            current_balance = Decimal(0)
-            total_loss = Decimal(0)
-            my_share = Decimal(0)
-            company_share = Decimal(0)
-            combined_share = Decimal(0)
-            total_my_share = Decimal(0)
-            total_company_share = Decimal(0)
-            total_combined_share = Decimal(0)
-            my_share_pct = client_exchange.my_share_pct or Decimal(0)
-            company_share_pct = Decimal(0)
-            total_share_pct = my_share_pct
-            pending_raw = Decimal(0)
+            # Calculate values using PIN-TO-PIN formulas
+            funding = Decimal(client_exchange.funding)
+            exchange_balance = Decimal(client_exchange.exchange_balance)
+            total_loss = abs(client_pnl)  # Client_PnL is negative, so abs gives loss amount
+            my_share = client_exchange.compute_my_share()  # My_Share = ABS(Client_PnL) × my_percentage / 100
+            my_share_pct = client_exchange.my_percentage
             
-            # TODO: Calculate if client should be added to list
-            has_pending = False
-            
-            if has_pending:
+            # Add to list (always add if Client_PnL != 0)
+            if client_pnl != 0:
                 clients_owe_list.append({
-                    "client_id": client_exchange.client.pk,
-                    "client_name": client_exchange.client.name,
-                    "client_code": client_exchange.client.code,
-                    "exchange_name": client_exchange.exchange.name,
-                    "exchange_id": client_exchange.exchange.pk,
-                    "client_exchange_id": client_exchange.pk,
-                    "old_balance": old_balance,
-                    "current_balance": current_balance,
-                    "exchange_balance": current_balance,
-                    "total_loss": total_loss,
-                    "pending_amount": pending_amount,
-                    "pending_raw": pending_raw,
-                    "company_pending": Decimal(0),
-                    "your_earnings": Decimal(0),
-                    "my_share": my_share,
-                    "company_share": company_share,
-                    "combined_share": combined_share,
-                    "total_my_share": total_my_share,
-                    "total_company_share": total_company_share,
-                    "total_combined_share": total_combined_share,
-                    "my_share_pct": my_share_pct,
-                    "company_share_pct": company_share_pct,
-                    "total_share_pct": total_share_pct,
-                    "is_company_client": False,
+                    "client": client_exchange.client,
+                    "exchange": client_exchange.exchange,
+                    "account": client_exchange,
+                    "client_pnl": client_pnl,
+                    "amount_owed": total_loss,  # Amount owed = total loss
+                    "my_share_amount": my_share,
                 })
             continue
         
         if is_profit_case:
             # This is the "You Owe Clients" section
             
-            # Placeholder variables - replace with your calculations
-            combined_share = Decimal(0)
-            my_share = Decimal(0)
-            company_share = Decimal(0)
-            unpaid_profit = Decimal(0)
-            old_balance = Decimal(0)
-            current_balance = Decimal(0)
-            my_share_pct = client_exchange.my_share_pct or Decimal(0)
-            company_share_pct = Decimal(0)
+            # Calculate values using PIN-TO-PIN formulas
+            funding = Decimal(client_exchange.funding)
+            exchange_balance = Decimal(client_exchange.exchange_balance)
+            unpaid_profit = client_pnl  # Client_PnL is positive (profit)
+            my_share = client_exchange.compute_my_share()  # My_Share = ABS(Client_PnL) × my_percentage / 100
+            my_share_pct = client_exchange.my_percentage
             
-            # TODO: Calculate if client should be added to list
-            should_show = False
-            
-            if should_show:
+            # Add to list (always add if Client_PnL != 0)
+            if client_pnl != 0:
                 you_owe_list.append({
-                    "client_id": client_exchange.client.pk,
-                    "client_name": client_exchange.client.name,
-                    "client_code": client_exchange.client.code,
-                    "exchange_name": client_exchange.exchange.name,
-                    "exchange_id": client_exchange.exchange.pk,
-                    "client_exchange_id": client_exchange.pk,
-                    "old_balance": old_balance,
-                    "current_balance": current_balance,
-                    "exchange_balance": current_balance,
-                    "client_profit": unpaid_profit,
-                    "combined_share": combined_share,
-                    "my_share": my_share,
-                    "company_share": company_share,
-                    "my_share_pct": my_share_pct,
-                    "company_share_pct": company_share_pct,
-                    "is_company_client": False,
+                    "client": client_exchange.client,
+                    "exchange": client_exchange.exchange,
+                    "account": client_exchange,
+                    "client_pnl": client_pnl,
+                    "amount_owed": unpaid_profit,  # Amount you owe = profit
+                    "my_share_amount": my_share,
                 })
     
     # Sort lists
-def get_sort_key(item):
-
-    if "combined_share" in item:
-        return abs(item["combined_share"])
-
-
-    elif "pending_amount" in item:
-        return item["pending_amount"]
-    elif "total_loss" in item:
-        return item["total_loss"]
-    else:
-        return 0
-
-        return Decimal(0)
-
+    def get_sort_key(item):
+        if "pending_amount" in item:
+            return abs(item["pending_amount"])
+        elif "total_loss" in item:
+            return abs(item["total_loss"])
+        elif "client_profit" in item:
+            return abs(item["client_profit"])
+        else:
+            return 0
     
     clients_owe_list.sort(key=get_sort_key, reverse=True)
-    you_owe_list.sort(key=lambda x: abs(x.get("combined_share", x.get("client_profit", 0))), reverse=True)
+    you_owe_list.sort(key=lambda x: abs(x.get("client_profit", 0)), reverse=True)
     
     # Calculate totals
-    total_pending = sum(item["pending_amount"] for item in clients_owe_list)
-    total_profit = sum(item["client_profit"] for item in you_owe_list)
+    total_clients_owe = sum(item.get("amount_owed", 0) for item in clients_owe_list)
+    total_my_share_clients_owe = sum(item.get("my_share_amount", 0) for item in clients_owe_list)
+    total_you_owe = sum(item.get("amount_owed", 0) for item in you_owe_list)
+    total_my_share_you_owe = sum(item.get("my_share_amount", 0) for item in you_owe_list)
+    
+    # Get all clients for search dropdown
+    all_clients = Client.objects.filter(user=request.user).order_by("name")
     
     context = {
-        "clients_owe": clients_owe_list,
-        "you_owe": you_owe_list,
-        "total_pending": total_pending,
-        "total_profit": total_profit,
+        "clients_owe_you": clients_owe_list,
+        "you_owe_clients": you_owe_list,
+        "total_clients_owe": total_clients_owe,
+        "total_my_share_clients_owe": total_my_share_clients_owe,
+        "total_you_owe": total_you_owe,
+        "total_my_share_you_owe": total_my_share_you_owe,
         "today": today,
         "report_type": report_type,
         "client_type_filter": client_type_filter,
@@ -1070,403 +1086,138 @@ def get_sort_key(item):
         "end_date": end_date,
         "date_range_label": date_range_label,
         "settings": settings,
-        "combine_shares": combine_shares,  # Flag to show combined shares
+        "combine_shares": combine_shares,
+        "search_query": search_query,
+        "all_clients": all_clients,
     }
     return render(request, "core/pending/summary.html", context)
 
 
 @login_required
-
-
 def export_pending_csv(request):
-
-
     """
-    Export pending payments report as plain CSV.
-    Export format must mirror Pending Payments UI table — one row per client, horizontal columns.
-    No styling, no colors, no formatting — just raw table data.
+    Export pending payments report as CSV.
+    Export format mirrors Pending Payments UI table exactly.
     """
     import csv
-    from datetime import timedelta
     
-    today = date.today()
-    report_type = request.GET.get("report_type", "daily")
+    # Get search query if any
+    search_query = request.GET.get("search", "").strip()
     section = request.GET.get("section", "all")  # "clients-owe", "you-owe", or "all"
-    client_type_filter = request.GET.get("client_type") or request.session.get('client_type_filter', 'all')
-    
-    if client_type_filter == '':
-
-    
-        pass
-    # Calculate date range based on report type
-    if report_type == "daily":
-
-        end_date = today
-    elif report_type == "weekly":
-        start_date = today - timedelta(days=6)
-
-        end_date = today
-    elif report_type == "monthly":
-        start_date = today - timedelta(days=29)
-
-        end_date = today
-    else:
-
-        start_date = today
-
-        end_date = today
     
     # Get all client exchanges for the user
-    client_exchanges = ClientExchangeAccount.objects.filter(client__user=request.user)
+    client_exchanges = ClientExchangeAccount.objects.filter(
+        client__user=request.user
+    ).select_related("client", "exchange")
     
-    # All clients are now my clients - no filter needed
-    # client_exchanges already contains all clients
-    
-    # Get combine_shares from URL parameter (default to True if not specified)
-    combine_shares_param = request.GET.get("combine_shares")
-    if combine_shares_param is None:
-        combine_shares = True
-    else:
-        combine_shares = combine_shares_param.lower() == "true"
-
+    # Apply search filter if provided
+    if search_query:
+        client_exchanges = client_exchanges.filter(
+            Q(client__name__icontains=search_query) |
+            Q(client__code__icontains=search_query) |
+            Q(exchange__name__icontains=search_query) |
+            Q(exchange__code__icontains=search_query)
+        )
     
     # Use EXACT same data building logic as pending_summary
-    # This ensures CSV matches UI exactly - if UI shows 1 row, CSV shows 1 row
     clients_owe_list = []
     you_owe_list = []
     
     for client_exchange in client_exchanges:
-        # This should match the logic in pending_summary()
+        # Compute Client_PnL using PIN-TO-PIN formula
+        client_pnl = client_exchange.compute_client_pnl()
         
-        # Placeholder: Determine if client owes you or you owe client
-        # TODO: Replace with your new logic
-        is_loss_case = False  # Placeholder - client owes you
-        is_profit_case = False  # Placeholder - you owe client
+        # Determine if client owes you or you owe client
+        is_loss_case = client_pnl < 0  # Client owes you (loss)
+        is_profit_case = client_pnl > 0  # You owe client (profit)
+        
         if is_loss_case:
             # This is the "Clients Owe You" section
+            total_loss = abs(client_pnl)  # Client_PnL is negative, so abs gives loss amount
+            my_share = client_exchange.compute_my_share()
             
-            # Placeholder variables - replace with your calculations
-            pending_amount = Decimal(0)
-            old_balance = Decimal(0)
-            current_balance = Decimal(0)
-            total_loss = Decimal(0)
-            my_share = Decimal(0)
-            company_share = Decimal(0)
-            combined_share = Decimal(0)
-            my_share_pct = client_exchange.my_share_pct or Decimal(0)
-            company_share_pct = Decimal(0)
-            
-            # TODO: Calculate if client should be added to list
-            has_pending = False
-            
-            if has_pending:
+            # Add to list (always add if Client_PnL != 0)
+            if client_pnl != 0:
                 clients_owe_list.append({
-                    "client_code": client_exchange.client.code,
-                    "client_name": client_exchange.client.name,
-                    "exchange_name": client_exchange.exchange.name,
-                    "old_balance": old_balance,
-                    "current_balance": current_balance,
-                    "exchange_balance": current_balance,
-                    "total_loss": total_loss,
-                    "my_share": my_share,
-                "my_share_pct": my_share_pct,
-                "company_share": company_share,
-                "company_share_pct": company_share_pct,
-                "combined_share": combined_share,
-                    "is_company_client": False,
+                    "client": client_exchange.client,
+                    "exchange": client_exchange.exchange,
+                    "account": client_exchange,
+                    "client_pnl": client_pnl,
+                    "amount_owed": total_loss,
+                    "my_share_amount": my_share,
                 })
             continue
         
         if is_profit_case:
             # This is the "You Owe Clients" section
+            unpaid_profit = client_pnl  # Client_PnL is positive (profit)
+            my_share = client_exchange.compute_my_share()
             
-            # Placeholder variables - replace with your calculations
-            combined_share = Decimal(0)
-            my_share = Decimal(0)
-            company_share = Decimal(0)
-            unpaid_profit = Decimal(0)
-            old_balance = Decimal(0)
-            current_balance = Decimal(0)
-            my_share_pct = client_exchange.my_share_pct or Decimal(0)
-            company_share_pct = Decimal(0)
-                    
-            # TODO: Calculate if client should be added to list
-            should_show = False
-                
-            if should_show:
+            # Add to list (always add if Client_PnL != 0)
+            if client_pnl != 0:
                 you_owe_list.append({
-                    "client_code": client_exchange.client.code,
-                    "client_name": client_exchange.client.name,
-                    "exchange_name": client_exchange.exchange.name,
-                    "old_balance": old_balance,
-                    "current_balance": current_balance,
-                    "total_profit": unpaid_profit,
-                    "my_share": my_share,
-                    "my_share_pct": my_share_pct,
-                    "company_share": company_share,
-                    "company_share_pct": company_share_pct,
-                    "combined_share": combined_share,
-                    "is_company_client": False,
+                    "client": client_exchange.client,
+                    "exchange": client_exchange.exchange,
+                    "account": client_exchange,
+                    "client_pnl": client_pnl,
+                    "amount_owed": unpaid_profit,
+                    "my_share_amount": my_share,
                 })
-
     
-    # Sort by amount (descending) - same as UI
-    clients_owe_list.sort(key=lambda x: x["combined_share"], reverse=True)
-    you_owe_list.sort(key=lambda x: x["combined_share"], reverse=True)
+    # Sort lists by amount (descending)
+    clients_owe_list.sort(key=lambda x: abs(x["client_pnl"]), reverse=True)
+    you_owe_list.sort(key=lambda x: abs(x["client_pnl"]), reverse=True)
     
-    # Debug prints removed to prevent BrokenPipeError
-    # If UI shows 1 row → CSV must show 1 row
-    # If UI is empty → CSV must be empty
-    
-    # Create CSV response - plain text, no styling
+    # Create CSV response
     response = HttpResponse(content_type='text/csv')
-    filename = f"pending_payments_{report_type}_{date.today()}.csv"
+    filename = f"pending_payments_{date.today().strftime('%Y%m%d')}.csv"
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     
     writer = csv.writer(response)
     
-    # Write header row (exactly matching UI table - Amount first, then percentage)
-    # Headers are written in uppercase to make them more prominent/visible
-    # Include Report Date as the first column in the header row for consistent formatting
-    # If combine_shares is true and showing company clients, show Combined Share amount and Company %
-    if combine_shares and (client_type_filter == 'company' or client_type_filter == 'all'):
-        headers = [
-            'Report Date',
-
-            'Client Code',
-
-            'Client Name',
-
-            'Exchange',
-
-            'Old Balance',
-
-            'Current Balance',
-
-            'Total Loss',
-
-            'Combined Share (My + Company)',
-
-            'My Share & Company Share (%)' if (client_type_filter == 'company' or client_type_filter == 'all') else 'My Share %',
-
-        ]
-        # Write headers in uppercase for better visibility
-        writer.writerow([h.upper() for h in headers])
-    elif client_type_filter == 'company' or client_type_filter == 'all':
-        # Company Clients: Show both My and Company columns
-        headers = [
-            'Report Date',
-
-            'Client Code',
-
-            'Client Name',
-
-            'Exchange',
-
-            'Old Balance',
-
-            'Current Balance',
-
-            'Total Loss',
-
-            'My Amount',
-
-            'My %',
-
-            'Company Amount',
-
-            'Company %',
-
-        ]
-        # Write headers in uppercase for better visibility
-        writer.writerow([h.upper() for h in headers])
-    else:
-        # My Clients: Show only My columns
-        headers = [
-            'Report Date',
-
-            'Client Code',
-
-            'Client Name',
-
-            'Exchange',
-
-            'Old Balance',
-
-            'Current Balance',
-
-            'Total Loss',
-
-            'My Amount',
-
-            'My %',
-
-        ]
-        # Write headers in uppercase for better visibility
-        writer.writerow([h.upper() for h in headers])
+    # Write header row
+    headers = [
+        'Client Name',
+        'Client Code',
+        'Exchange Name',
+        'Exchange Code',
+        'Funding',
+        'Exchange Balance',
+        'Client PnL',
+        'My Share',
+        'My %'
+    ]
+    writer.writerow([h.upper() for h in headers])
     
     # Write Clients Owe You section (if requested)
-    # Use SAME data source as pending UI - one row per client, horizontal format
-    if section in ["all", "clients-owe"] and clients_owe_list:
-
-            # If combine_shares is true and it's a company client, show Combined Share amount and Company %
-            if combine_shares and item.get("is_company_client", False):
-                writer.writerow([
-
-
-                    date.today().strftime('%Y-%m-%d'),  # Report Date
-
-                    item["client_code"] or '—',
-
-                    item["client_name"],
-
-                    item["exchange_name"],
-
-                    float(item["old_balance"]),
-
-                    float(item["current_balance"]),
-
-                    float(item.get("total_loss", 0)),
-
-                    float(item.get("combined_share", 0)),
-
-                    float(item.get("company_share_pct", 0)),
-
-                ])
-
-            elif client_type_filter == 'company' or client_type_filter == 'all':
-
-
-                writer.writerow([
-
-
-                    date.today().strftime('%Y-%m-%d'),  # Report Date
-
-                    item["client_code"] or '—',
-
-                    item["client_name"],
-
-                    item["exchange_name"],
-
-                    float(item["old_balance"]),
-
-                    float(item["current_balance"]),
-
-                    float(item.get("total_loss", 0)),
-
-                    float(item.get("my_share", 0)),
-
-                    float(item.get("my_share_pct", 0)),
-
-                    float(item.get("company_share", 0)),
-
-                    float(item.get("company_share_pct", 0)),
-
-                ])
-
-                writer.writerow([
-
-                    date.today().strftime('%Y-%m-%d'),  # Report Date
-
-                    item["client_code"] or '—',
-
-                    item["client_name"],
-
-                    item["exchange_name"],
-
-                    float(item["old_balance"]),
-
-                    float(item["current_balance"]),
-
-                    float(item.get("total_loss", 0)),
-
-                    float(item.get("my_share", 0)),
-
-                    float(item.get("my_share_pct", 0)),
-
-                ])
-
+    if section in ["all", "clients-owe"]:
+        for item in clients_owe_list:
+            writer.writerow([
+                item["client"].name or '',
+                item["client"].code or '',
+                item["exchange"].name or '',
+                item["exchange"].code or '',
+                int(item["account"].funding),
+                int(item["account"].exchange_balance),
+                int(item["client_pnl"]),
+                int(item["my_share_amount"]),
+                item["account"].my_percentage
+            ])
     
     # Write You Owe Clients section (if requested)
-    if section in ["all", "you-owe"] and you_owe_list:
-
-            # If combine_shares is true and it's a company client, show Combined Share amount and Company %
-            if combine_shares and item.get("is_company_client", False):
-                writer.writerow([
-
-
-                    date.today().strftime('%Y-%m-%d'),  # Report Date
-
-                    item["client_code"] or '—',
-
-                    item["client_name"],
-
-                    item["exchange_name"],
-
-                    float(item["old_balance"]),
-
-                    float(item["current_balance"]),
-
-                    float(item.get("total_profit", 0)),
-
-                    float(item.get("combined_share", 0)),
-
-                    float(item.get("company_share_pct", 0)),
-
-                ])
-
-            elif client_type_filter == 'company' or client_type_filter == 'all':
-
-
-                writer.writerow([
-
-
-                    date.today().strftime('%Y-%m-%d'),  # Report Date
-
-                    item["client_code"] or '—',
-
-                    item["client_name"],
-
-                    item["exchange_name"],
-
-                    float(item["old_balance"]),
-
-                    float(item["current_balance"]),
-
-                    float(item.get("total_profit", 0)),
-
-                    float(item.get("my_share", 0)),
-
-                    float(item.get("my_share_pct", 0)),
-
-                    float(item.get("company_share", 0)),
-
-                    float(item.get("company_share_pct", 0)),
-
-                ])
-
-                writer.writerow([
-
-                    date.today().strftime('%Y-%m-%d'),  # Report Date
-
-                    item["client_code"] or '—',
-
-                    item["client_name"],
-
-                    item["exchange_name"],
-
-                    float(item["old_balance"]),
-
-                    float(item["current_balance"]),
-
-                    float(item.get("total_profit", 0)),
-
-                    float(item.get("my_share", 0)),
-
-                    float(item.get("my_share_pct", 0)),
-
-                ])
-
+    if section in ["all", "you-owe"]:
+        for item in you_owe_list:
+            writer.writerow([
+                item["client"].name or '',
+                item["client"].code or '',
+                item["exchange"].name or '',
+                item["exchange"].code or '',
+                int(item["account"].funding),
+                int(item["account"].exchange_balance),
+                int(item["client_pnl"]),
+                int(item["my_share_amount"]),
+                item["account"].my_percentage
+            ])
     
     return response
 
@@ -2025,7 +1776,7 @@ def company_share_summary(request):
     # Company share summary removed - no longer needed
     from django.contrib import messages
     messages.info(request, "Company share summary is no longer available.")
-    return redirect(reverse("my_clients:list"))
+    return redirect(reverse("client_list"))
 
 
 # Exchange Management Views
@@ -2033,14 +1784,8 @@ def company_share_summary(request):
 
 
 def exchange_create(request):
-
-
     """Create a new standalone exchange (A, B, C, D, etc.)."""
     if request.method == "POST":
-        from django.shortcuts import redirect
-        from django.urls import reverse
-        from core.models import Exchange
-        
         name = request.POST.get("name", "").strip()
         code = request.POST.get("code", "").strip()
         
@@ -2049,8 +1794,12 @@ def exchange_create(request):
                 name=name,
                 code=code if code else None,
             )
-            return redirect("exchange_list")
-
+            from django.contrib import messages
+            messages.success(request, f"Exchange '{name}' has been created successfully.")
+            return redirect(reverse("exchange_list"))
+        else:
+            from django.contrib import messages
+            messages.error(request, "Exchange name is required.")
     
     return render(request, "core/exchanges/create.html")
 
@@ -2067,7 +1816,7 @@ def exchange_edit(request, pk):
 
         exchange.code = request.POST.get("code", "").strip() or None
         exchange.save()
-        return redirect(reverse("exchanges:list"))
+        return redirect(reverse("exchange_list"))
     
     return render(request, "core/exchanges/edit.html", {"exchange": exchange})
 
@@ -2348,7 +2097,7 @@ def transaction_create(request):
                 )
 
             
-            return redirect(reverse("transactions:list"))
+            return redirect(reverse("transaction_list"))
 
     
     # Get client-exchanges for selected client (if provided)
@@ -2588,7 +2337,7 @@ def transaction_edit(request, pk):
 
             
             
-            return redirect(reverse("transactions:list"))
+            return redirect(reverse("transaction_list"))
 
     
     return render(request, "core/transactions/edit.html", {"transaction": transaction})
@@ -3116,37 +2865,183 @@ def report_client(request, client_pk):
 @login_required
 
 
-def link_client_to_exchange(request):
-
-
-    """Link a client to an exchange - redirects to client detail page."""
-    # TODO: Implement link_client_to_exchange logic
-    return redirect('client_list')
-
-
 @login_required
-
-
-def exchange_account_detail(request, pk):
-
-
-    """View details of a client-exchange account."""
-    account = get_object_or_404(ClientExchangeAccount, pk=pk, client__user=request.user)
-    # TODO: Add account detail view logic
-    return render(request, "core/exchanges/account_detail.html", {
-        'account': account
+def link_client_to_exchange(request):
+    """Link a client to an exchange with percentage configuration."""
+    if request.method == "POST":
+        client_id = request.POST.get("client")
+        exchange_id = request.POST.get("exchange")
+        my_percentage = request.POST.get("my_percentage", "").strip()
+        friend_percentage = request.POST.get("friend_percentage", "").strip()
+        my_own_percentage = request.POST.get("my_own_percentage", "").strip()
+        
+        # Validation
+        if not client_id or not exchange_id or not my_percentage:
+            from django.contrib import messages
+            messages.error(request, "Client, Exchange, and My Total % are required.")
+            return render(request, "core/exchanges/link_to_client.html", {
+                "clients": Client.objects.filter(user=request.user).order_by("name"),
+                "exchanges": Exchange.objects.all().order_by("name"),
+            })
+        
+        try:
+            client = Client.objects.get(pk=client_id, user=request.user)
+            exchange = Exchange.objects.get(pk=exchange_id)
+            my_percentage_int = int(my_percentage)
+            
+            # Validate percentage range
+            if my_percentage_int < 0 or my_percentage_int > 100:
+                from django.contrib import messages
+                messages.error(request, "My Total % must be between 0 and 100.")
+                return render(request, "core/exchanges/link_to_client.html", {
+                    "clients": Client.objects.filter(user=request.user).order_by("name"),
+                    "exchanges": Exchange.objects.all().order_by("name"),
+                })
+            
+            # Check if link already exists
+            if ClientExchangeAccount.objects.filter(client=client, exchange=exchange).exists():
+                from django.contrib import messages
+                messages.error(request, f"Client '{client.name}' is already linked to '{exchange.name}'.")
+                return render(request, "core/exchanges/link_to_client.html", {
+                    "clients": Client.objects.filter(user=request.user).order_by("name"),
+                    "exchanges": Exchange.objects.all().order_by("name"),
+                })
+            
+            # Create ClientExchangeAccount
+            account = ClientExchangeAccount.objects.create(
+                client=client,
+                exchange=exchange,
+                funding=0,
+                exchange_balance=0,
+                my_percentage=my_percentage_int,
+            )
+            
+            # Create report config if friend/own percentages provided
+            if friend_percentage or my_own_percentage:
+                friend_pct = int(friend_percentage) if friend_percentage else 0
+                own_pct = int(my_own_percentage) if my_own_percentage else 0
+                
+                # Validate: friend % + my own % = my total %
+                if friend_pct + own_pct != my_percentage_int:
+                    from django.contrib import messages
+                    messages.warning(
+                        request,
+                        f"Friend % ({friend_pct}) + My Own % ({own_pct}) = {friend_pct + own_pct}, "
+                        f"but My Total % = {my_percentage_int}. Report config not created."
+                    )
+                else:
+                    ClientExchangeReportConfig.objects.create(
+                        client_exchange=account,
+                        friend_percentage=friend_pct,
+                        my_own_percentage=own_pct,
+                    )
+            
+            from django.contrib import messages
+            messages.success(request, f"Successfully linked '{client.name}' to '{exchange.name}'.")
+            return redirect(reverse("client_detail", args=[client.pk]))
+            
+        except (Client.DoesNotExist, Exchange.DoesNotExist):
+            from django.contrib import messages
+            messages.error(request, "Invalid client or exchange selected.")
+        except ValueError:
+            from django.contrib import messages
+            messages.error(request, "Invalid percentage value. Please enter numbers only.")
+        except Exception as e:
+            from django.contrib import messages
+            messages.error(request, f"Error linking client to exchange: {str(e)}")
+    
+    # GET request - show form
+    return render(request, "core/exchanges/link_to_client.html", {
+        "clients": Client.objects.filter(user=request.user).order_by("name"),
+        "exchanges": Exchange.objects.all().order_by("name"),
     })
 
 
 @login_required
 
 
+@login_required
+def exchange_account_detail(request, pk):
+    """View details of a client-exchange account."""
+    account = get_object_or_404(ClientExchangeAccount, pk=pk, client__user=request.user)
+    
+    # Get recent transactions for this account
+    transactions = Transaction.objects.filter(client_exchange=account).order_by("-date", "-created_at")[:20]
+    
+    return render(request, "core/exchanges/account_detail.html", {
+        'account': account,
+        'transactions': transactions,
+    })
+
+
+@login_required
+
+
+@login_required
 def add_funding(request, account_id):
-
-
-    """Add funding to a client-exchange account."""
+    """Add funding to a client-exchange account.
+    
+    FUNDING RULE: When money is given to client:
+    - funding = funding + amount
+    - exchange_balance = exchange_balance + amount
+    Both must increase by the same amount simultaneously.
+    """
     account = get_object_or_404(ClientExchangeAccount, pk=account_id, client__user=request.user)
-    # TODO: Implement add_funding logic
+    
+    if request.method == "POST":
+        amount_str = request.POST.get("amount", "").strip()
+        notes = request.POST.get("notes", "").strip()
+        
+        if not amount_str:
+            from django.contrib import messages
+            messages.error(request, "Amount is required.")
+            return render(request, "core/exchanges/add_funding.html", {
+                'account': account
+            })
+        
+        try:
+            amount = int(amount_str)
+            if amount <= 0:
+                from django.contrib import messages
+                messages.error(request, "Amount must be greater than zero.")
+                return render(request, "core/exchanges/add_funding.html", {
+                    'account': account
+                })
+            
+            # FUNDING RULE: Both funding and exchange_balance increase by the same amount
+            old_funding = account.funding
+            old_balance = account.exchange_balance
+            
+            account.funding += amount
+            account.exchange_balance += amount
+            account.save()
+            
+            # Create transaction record for audit trail
+            Transaction.objects.create(
+                client_exchange=account,
+                date=timezone.now(),
+                type='FUNDING',
+                amount=amount,
+                exchange_balance_after=account.exchange_balance,
+                notes=notes or f"Funding added: {amount}"
+            )
+            
+            from django.contrib import messages
+            messages.success(
+                request,
+                f"Funding of {amount} added successfully. "
+                f"Funding: {old_funding} → {account.funding}, "
+                f"Balance: {old_balance} → {account.exchange_balance}"
+            )
+            return redirect(reverse("exchange_account_detail", args=[account.pk]))
+            
+        except ValueError:
+            from django.contrib import messages
+            messages.error(request, "Invalid amount. Please enter a valid number.")
+        except Exception as e:
+            from django.contrib import messages
+            messages.error(request, f"Error adding funding: {str(e)}")
+    
     return render(request, "core/exchanges/add_funding.html", {
         'account': account
     })
@@ -3155,12 +3050,68 @@ def add_funding(request, account_id):
 @login_required
 
 
+@login_required
 def update_exchange_balance(request, account_id):
-
-
-    """Update exchange balance for a client-exchange account."""
+    """Update exchange balance for a client-exchange account.
+    
+    Only exchange_balance changes. Funding remains untouched.
+    Used for trades, fees, profits, losses.
+    """
     account = get_object_or_404(ClientExchangeAccount, pk=account_id, client__user=request.user)
-    # TODO: Implement update_exchange_balance logic
+    
+    if request.method == "POST":
+        new_balance_str = request.POST.get("new_balance", "").strip()
+        transaction_type = request.POST.get("transaction_type", "TRADE")
+        notes = request.POST.get("notes", "").strip()
+        
+        if not new_balance_str:
+            from django.contrib import messages
+            messages.error(request, "New balance is required.")
+            return render(request, "core/exchanges/update_balance.html", {
+                'account': account
+            })
+        
+        try:
+            new_balance = int(new_balance_str)
+            if new_balance < 0:
+                from django.contrib import messages
+                messages.error(request, "Balance cannot be negative.")
+                return render(request, "core/exchanges/update_balance.html", {
+                    'account': account
+                })
+            
+            old_balance = account.exchange_balance
+            balance_change = new_balance - old_balance
+            
+            # Only exchange_balance changes, funding stays the same
+            account.exchange_balance = new_balance
+            account.save()
+            
+            # Create transaction record for audit trail
+            Transaction.objects.create(
+                client_exchange=account,
+                date=timezone.now(),
+                type=transaction_type,
+                amount=abs(balance_change),  # Store absolute value
+                exchange_balance_after=new_balance,
+                notes=notes or f"Balance updated: {old_balance} → {new_balance} ({balance_change:+})"
+            )
+            
+            from django.contrib import messages
+            messages.success(
+                request,
+                f"Balance updated successfully. "
+                f"Exchange Balance: {old_balance} → {new_balance} ({balance_change:+})"
+            )
+            return redirect(reverse("exchange_account_detail", args=[account.pk]))
+            
+        except ValueError:
+            from django.contrib import messages
+            messages.error(request, "Invalid balance. Please enter a valid number.")
+        except Exception as e:
+            from django.contrib import messages
+            messages.error(request, f"Error updating balance: {str(e)}")
+    
     return render(request, "core/exchanges/update_balance.html", {
         'account': account
     })
@@ -3169,14 +3120,137 @@ def update_exchange_balance(request, account_id):
 @login_required
 
 
+@login_required
 def record_payment(request, account_id):
-
-
-    """Record a payment for a client-exchange account."""
+    """Record a payment for a client-exchange account.
+    
+    RECORD PAYMENT LOGIC (PIN-TO-PIN):
+    - If Client_PnL < 0 (LOSS): funding = funding - paid_amount
+    - If Client_PnL > 0 (PROFIT): exchange_balance = exchange_balance - paid_amount
+    - Validate: paid_amount <= ABS(Client_PnL)
+    - Partial payments allowed
+    """
     account = get_object_or_404(ClientExchangeAccount, pk=account_id, client__user=request.user)
-    # TODO: Implement record_payment logic
+    client_pnl = account.compute_client_pnl()
+    redirect_to = request.GET.get('redirect_to', 'exchange_account_detail')
+    
+    if request.method == "POST":
+        paid_amount_str = request.POST.get("paid_amount", "").strip()
+        notes = request.POST.get("notes", "").strip()
+        
+        if not paid_amount_str:
+            from django.contrib import messages
+            abs_client_pnl = abs(client_pnl) if client_pnl != 0 else 0
+            messages.error(request, "Paid amount is required.")
+            return render(request, "core/exchanges/record_payment.html", {
+                'account': account,
+                'client_pnl': client_pnl,
+                'abs_client_pnl': abs_client_pnl,
+            })
+        
+        try:
+            paid_amount = int(paid_amount_str)
+            if paid_amount <= 0:
+                from django.contrib import messages
+                abs_client_pnl = abs(client_pnl) if client_pnl != 0 else 0
+                messages.error(request, "Paid amount must be greater than zero.")
+                return render(request, "core/exchanges/record_payment.html", {
+                    'account': account,
+                    'client_pnl': client_pnl,
+                    'abs_client_pnl': abs_client_pnl,
+                })
+            
+            # Validate: paid_amount <= ABS(Client_PnL)
+            max_amount = abs(client_pnl)
+            if paid_amount > max_amount:
+                from django.contrib import messages
+                abs_client_pnl = abs(client_pnl) if client_pnl != 0 else 0
+                messages.error(request, f"Paid amount ({paid_amount}) cannot exceed outstanding amount ({max_amount}).")
+                return render(request, "core/exchanges/record_payment.html", {
+                    'account': account,
+                    'client_pnl': client_pnl,
+                    'abs_client_pnl': abs_client_pnl,
+                })
+            
+            # Check if already settled
+            if client_pnl == 0:
+                from django.contrib import messages
+                messages.warning(request, "Account is already fully settled. No payment needed.")
+                if redirect_to == 'pending_summary':
+                    return redirect(reverse("pending_summary"))
+                return redirect(reverse("exchange_account_detail", args=[account.pk]))
+            
+            # Apply RECORD PAYMENT logic
+            old_funding = account.funding
+            old_balance = account.exchange_balance
+            
+            if client_pnl < 0:
+                # LOSS CASE: Reduce funding
+                account.funding -= paid_amount
+                account.save()
+                action_desc = f"Funding reduced: {old_funding} → {account.funding}"
+            else:
+                # PROFIT CASE: Reduce exchange_balance
+                account.exchange_balance -= paid_amount
+                account.save()
+                action_desc = f"Exchange balance reduced: {old_balance} → {account.exchange_balance}"
+            
+            # Create transaction record for audit trail
+            Transaction.objects.create(
+                client_exchange=account,
+                date=timezone.now(),
+                type='RECORD_PAYMENT',
+                amount=paid_amount,
+                exchange_balance_after=account.exchange_balance,
+                notes=notes or f"Payment recorded: {paid_amount}. {action_desc}"
+            )
+            
+            # Recompute PnL after payment
+            new_pnl = account.compute_client_pnl()
+            
+            from django.contrib import messages
+            if new_pnl == 0:
+                messages.success(
+                    request,
+                    f"Payment of {paid_amount} recorded successfully. Account is now fully settled!"
+                )
+            else:
+                messages.success(
+                    request,
+                    f"Payment of {paid_amount} recorded successfully. "
+                    f"Remaining PnL: {new_pnl} ({'profit' if new_pnl > 0 else 'loss'})"
+                )
+            
+            # Redirect based on redirect_to parameter
+            if redirect_to == 'pending_summary':
+                return redirect(reverse("pending_summary"))
+            return redirect(reverse("exchange_account_detail", args=[account.pk]))
+            
+        except ValueError:
+            from django.contrib import messages
+            abs_client_pnl = abs(client_pnl) if client_pnl != 0 else 0
+            messages.error(request, "Invalid amount. Please enter a valid number.")
+            return render(request, "core/exchanges/record_payment.html", {
+                'account': account,
+                'client_pnl': client_pnl,
+                'abs_client_pnl': abs_client_pnl,
+            })
+        except Exception as e:
+            from django.contrib import messages
+            abs_client_pnl = abs(client_pnl) if client_pnl != 0 else 0
+            messages.error(request, f"Error recording payment: {str(e)}")
+            return render(request, "core/exchanges/record_payment.html", {
+                'account': account,
+                'client_pnl': client_pnl,
+                'abs_client_pnl': abs_client_pnl,
+            })
+    
+    # GET request - show form
+    abs_client_pnl = abs(client_pnl) if client_pnl != 0 else 0
     return render(request, "core/exchanges/record_payment.html", {
-        'account': account
+        'account': account,
+        'client_pnl': client_pnl,
+        'abs_client_pnl': abs_client_pnl,
     })
 
 

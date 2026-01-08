@@ -34,6 +34,7 @@ urlpatterns = [
     
     # Pending Payments
     path('pending/', views.pending_summary, name='pending_summary'),
+    path('pending/export/', views.export_pending_csv, name='export_pending_csv'),
     
     # Reports
     path('reports/', views.report_overview, name='report_overview'),
