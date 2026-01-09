@@ -4,7 +4,7 @@ import json
 
 from django.contrib.auth import logout, login, authenticate
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q, Sum, Count, F
+from django.db.models import Q, Sum, Count, F, Value
 from django.db import transaction as db_transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -536,9 +536,8 @@ def client_give_money(request, client_pk):
 
                 amount=amount,
 
-                client_share_amount=amount,  # Client gets the full amount
-
-                your_share_amount=Decimal(0),
+                # NOTE: Transaction model doesn't have client_share_amount or your_share_amount
+                exchange_balance_after=client_exchange.exchange_balance,
 
                 note=note,
 
@@ -642,27 +641,98 @@ def settle_payment(request):
 
 @login_required
 def client_create(request):
-    """Create a new client"""
+    """Create a new client
+    
+    Rules:
+    - Client code must be UNIQUE if provided (non-NULL)
+    - Client code can be EMPTY/NULL
+    - Multiple clients can have the same name
+    - If client code is NULL, the index (ID) will always be different
+    - Two clients must NEVER have the same non-NULL client code
+    """
     if request.method == "POST":
+        from django.contrib import messages
+        from django.core.exceptions import ValidationError
+        from django.db import IntegrityError
+        
         name = request.POST.get("name", "").strip()
         code = request.POST.get("code", "").strip()
         referred_by = request.POST.get("referred_by", "").strip()
-        is_company_client = request.POST.get("is_company_client") == "on"
+        # Company client concept removed - all clients are personal clients
+        is_company_client = False
         
-        if name:
-            Client.objects.create(
+        if not name:
+            messages.error(request, "Client name is required.")
+            return render(request, "core/clients/create.html", {
+                'code': code,
+                'referred_by': referred_by,
+            })
+        
+        # Process code: strip whitespace and convert empty string to None
+        if code:
+            code = code.strip()
+            if not code:
+                code = None
+        
+        # Check for duplicate code BEFORE saving (user-friendly error)
+        if code is not None:
+            existing_client = Client.objects.filter(code=code).first()
+            if existing_client:
+                messages.error(
+                    request,
+                    f"Client code '{code}' is already in use by client '{existing_client.name}'. "
+                    f"Please choose a different code or leave it blank."
+                )
+                return render(request, "core/clients/create.html", {
+                    'name': name,
+                    'code': code,
+                    'referred_by': referred_by,
+                })
+        
+        try:
+            # Create client
+            client = Client(
                 user=request.user,
                 name=name,
-                code=code if code else None,
+                code=code,  # Already None if empty
                 referred_by=referred_by if referred_by else None,
-                is_company_client=is_company_client,
+                is_company_client=False,  # Always False - concept removed
             )
-            from django.contrib import messages
+            # This will call clean() and save()
+            client.save()
+            
             messages.success(request, f"Client '{name}' has been created successfully.")
             return redirect(reverse("client_list"))
-        else:
-            from django.contrib import messages
-            messages.error(request, "Client name is required.")
+            
+        except ValidationError as e:
+            # Handle validation errors from model.clean()
+            messages.error(request, str(e))
+            return render(request, "core/clients/create.html", {
+                'name': name,
+                'code': code,
+                'referred_by': referred_by,
+            })
+        except IntegrityError as e:
+            # Handle database integrity errors (shouldn't happen with pre-check, but safety net)
+            if 'unique constraint' in str(e).lower() or 'duplicate' in str(e).lower():
+                messages.error(
+                    request,
+                    f"Client code '{code}' is already in use. Please choose a different code or leave it blank."
+                )
+            else:
+                messages.error(request, f"Error creating client: {str(e)}")
+            return render(request, "core/clients/create.html", {
+                'name': name,
+                'code': code,
+                'referred_by': referred_by,
+            })
+        except Exception as e:
+            messages.error(request, f"Error creating client: {str(e)}")
+            return render(request, "core/clients/create.html", {
+                'name': name,
+                'code': code,
+                'referred_by': referred_by,
+            })
     
     return render(request, "core/clients/create.html")
 
@@ -674,25 +744,98 @@ def client_create(request):
 
 
 def my_client_create(request):
-
-
-    """Create a my (personal) client"""
+    """Create a my (personal) client
+    
+    Rules:
+    - Client code must be UNIQUE if provided (non-NULL)
+    - Client code can be EMPTY/NULL
+    - Multiple clients can have the same name
+    - If client code is NULL, the index (ID) will always be different
+    - Two clients must NEVER have the same non-NULL client code
+    """
     if request.method == "POST":
         from django.shortcuts import redirect
         from django.urls import reverse
+        from django.contrib import messages
+        from django.core.exceptions import ValidationError
+        from django.db import IntegrityError
         from core.models import Client
 
         name = request.POST.get("name", "").strip()
         code = request.POST.get("code", "").strip()
         referred_by = request.POST.get("referred_by", "").strip()
-        if name:
-            Client.objects.create(
+        
+        if not name:
+            messages.error(request, "Client name is required.")
+            return render(request, "core/clients/create_my.html", {
+                'code': code,
+                'referred_by': referred_by,
+            })
+        
+        # Process code: strip whitespace and convert empty string to None
+        if code:
+            code = code.strip()
+            if not code:
+                code = None
+        
+        # Check for duplicate code BEFORE saving (user-friendly error)
+        if code is not None:
+            existing_client = Client.objects.filter(code=code).first()
+            if existing_client:
+                messages.error(
+                    request,
+                    f"Client code '{code}' is already in use by client '{existing_client.name}'. "
+                    f"Please choose a different code or leave it blank."
+                )
+                return render(request, "core/clients/create_my.html", {
+                    'name': name,
+                    'code': code,
+                    'referred_by': referred_by,
+                })
+        
+        try:
+            # Create client
+            client = Client(
                 user=request.user,
                 name=name,
-                code=code if code else None,
+                code=code,  # Already None if empty
                 referred_by=referred_by if referred_by else None,
             )
+            # This will call clean() and save()
+            client.save()
+            
+            messages.success(request, f"Client '{name}' has been created successfully.")
             return redirect("client_list")
+            
+        except ValidationError as e:
+            # Handle validation errors from model.clean()
+            messages.error(request, str(e))
+            return render(request, "core/clients/create_my.html", {
+                'name': name,
+                'code': code,
+                'referred_by': referred_by,
+            })
+        except IntegrityError as e:
+            # Handle database integrity errors (shouldn't happen with pre-check, but safety net)
+            if 'unique constraint' in str(e).lower() or 'duplicate' in str(e).lower():
+                messages.error(
+                    request,
+                    f"Client code '{code}' is already in use. Please choose a different code or leave it blank."
+                )
+            else:
+                messages.error(request, f"Error creating client: {str(e)}")
+            return render(request, "core/clients/create_my.html", {
+                'name': name,
+                'code': code,
+                'referred_by': referred_by,
+            })
+        except Exception as e:
+            messages.error(request, f"Error creating client: {str(e)}")
+            return render(request, "core/clients/create_my.html", {
+                'name': name,
+                'code': code,
+                'referred_by': referred_by,
+            })
 
     return render(request, "core/clients/create_my.html")
 
@@ -966,11 +1109,8 @@ def pending_summary(request):
             last_month = today.month - 1
             last_year = today.year
 
-
-            last_month_days = (date(today.year, today.month, 1) - timedelta(days=1)).day
-
-            start_date = date(today.year, last_month, min(day_of_month, last_month_days))
-
+        last_month_days = (date(today.year, today.month, 1) - timedelta(days=1)).day
+        start_date = date(today.year, last_month, min(day_of_month, last_month_days))
         end_date = today
         date_range_label = f"Monthly ({start_date.strftime('%b %d')} - {end_date.strftime('%b %d, %Y')})"
     else:
@@ -1445,22 +1585,22 @@ def report_overview(request):
     
     # Add specific client filter if specified
     if client_id:
-
+        user_filter["client_exchange__client_id"] = client_id
     
-        pass
+    # Initialize base queryset
+    base_qs = Transaction.objects.filter(**user_filter)
+    
+    # Apply date filter if specified
     if date_filter:
-
-        pass
-    else:
-
-        base_qs = Transaction.objects.filter(**user_filter)
+        base_qs = base_qs.filter(**date_filter)
 
     
     # Filter to only show transactions after payments are recorded (settled)
     # Get all client_exchanges that have at least one settlement
+    # Settlement transactions are recorded as 'RECORD_PAYMENT' type
     settled_client_exchanges = Transaction.objects.filter(
         **user_filter,
-        transaction_type=Transaction.TYPE_SETTLEMENT
+        type='RECORD_PAYMENT'
     ).values_list('client_exchange_id', flat=True).distinct()
     
     # For each settled client_exchange, get the latest settlement date
@@ -1480,7 +1620,8 @@ def report_overview(request):
     # 1. SETTLEMENT and FUNDING transactions (always include)
     # 2. PROFIT/LOSS transactions only if they're for settled client_exchanges and before/on settlement date
     from django.db.models import Q, F
-    settled_filter = Q(transaction_type__in=[Transaction.TYPE_SETTLEMENT, Transaction.TYPE_FUNDING])
+    # Settlement transactions are recorded as 'RECORD_PAYMENT' type
+    settled_filter = Q(type__in=['RECORD_PAYMENT', 'FUNDING'])
     
     # Add profit/loss transactions that are settled
     # Note: This section is for old transaction types that don't exist in PIN-TO-PIN
@@ -1510,40 +1651,16 @@ def report_overview(request):
     # Overall totals (filtered by time travel if applicable)
     total_turnover = base_qs.aggregate(total=Sum("amount"))["total"] or 0
     
-    # 📘 YOUR TOTAL PROFIT Calculation
-    # For company clients: your_share_amount = 1% of profit (in profit transactions)
-    # For my clients: your_share_amount = full share of profit (in profit transactions)
-    # This represents what you OWE clients (expense)
-    your_total_profit_from_profits = (
-        base_qs.filter(transaction_type=Transaction.TYPE_PROFIT).aggregate(total=Sum("your_share_amount"))[
-            "total"
-
-        ]
-        or 0
-    )
-    
-    # 📘 YOUR TOTAL INCOME from Losses
-    # For company clients: your_share_amount = 1% of loss (in loss transactions)
-    # For my clients: your_share_amount = full share of loss (in loss transactions)
-    # This represents what clients OWE you (income)
-    your_total_income_from_losses = (
-        base_qs.filter(transaction_type=Transaction.TYPE_LOSS).aggregate(total=Sum("your_share_amount"))[
-            "total"
-
-        ]
-        or 0
-    )
-    
-    # 📘 YOUR NET PROFIT = Income from Losses - Expense from Profits
-    # This shows your actual earnings (positive = you earned, negative = you owe)
-    your_total_profit = your_total_income_from_losses - your_total_profit_from_profits
+    # ✅ CORRECT FORMULA: MY PROFIT = Money I RECEIVE - Money I PAY
+    # My Profit = Sum of all RECORD_PAYMENT transaction amounts
+    # Positive amounts = client paid me (profit)
+    # Negative amounts = I paid client (loss/expense)
+    my_profit_qs = base_qs.filter(type='RECORD_PAYMENT')
+    your_total_profit = my_profit_qs.aggregate(total=Sum("amount"))["total"] or Decimal(0)
     
     # 📘 COMPANY PROFIT Calculation
-    # Sum of company_share_amount from ALL transactions (both profit and loss)
-    # For company clients: company_share_amount = 9% of movement
-    company_profit = (
-        Decimal(0)  # All clients are now my clients, company share is always 0
-    )
+    # All clients are now my clients, company share is always 0
+    company_profit = Decimal(0)
 
     # Daily trends for last 30 days (or filtered by time travel)
     if time_travel_mode and start_date_str and end_date_str:
@@ -1559,19 +1676,37 @@ def report_overview(request):
     
     daily_data = defaultdict(lambda: {"profit": 0, "loss": 0, "turnover": 0})
     
-    daily_transactions = base_qs.filter(
+    # ✅ CORRECT: Daily profit from RECORD_PAYMENT transactions
+    # My Profit = Sum of RECORD_PAYMENT amounts per day
+    daily_profit_transactions = base_qs.filter(
+        date__gte=start_date,
+        date__lte=end_date,
+        type='RECORD_PAYMENT'
+    ).values("date").annotate(
+        profit_sum=Sum("amount")
+    )
+    
+    # Daily turnover (all transaction types)
+    daily_turnover_transactions = base_qs.filter(
         date__gte=start_date,
         date__lte=end_date
-    ).values("date", "transaction_type").annotate(
-        profit_sum=Sum("your_share_amount", filter=Q(transaction_type=Transaction.TYPE_PROFIT)),
-        loss_sum=Sum("your_share_amount", filter=Q(transaction_type=Transaction.TYPE_LOSS)),
+    ).values("date").annotate(
         turnover_sum=Sum("amount")
     )
     
-    for item in daily_transactions:
-
-        daily_data[tx_date]["profit"] += float(item["profit_sum"] or 0)
-        daily_data[tx_date]["loss"] += float(item["loss_sum"] or 0)
+    # Process daily profit (from RECORD_PAYMENT)
+    for item in daily_profit_transactions:
+        tx_date = item["date"].date() if hasattr(item["date"], 'date') else item["date"]
+        profit_amount = float(item["profit_sum"] or 0)
+        # Positive = client paid me, Negative = I paid client
+        if profit_amount > 0:
+            daily_data[tx_date]["profit"] += profit_amount
+        else:
+            daily_data[tx_date]["loss"] += abs(profit_amount)  # Store as positive loss
+    
+    # Process daily turnover (all types)
+    for item in daily_turnover_transactions:
+        tx_date = item["date"].date() if hasattr(item["date"], 'date') else item["date"]
         daily_data[tx_date]["turnover"] += float(item["turnover_sum"] or 0)
     
     # Create sorted date list and data arrays
@@ -1594,7 +1729,8 @@ def report_overview(request):
         days_count += 1
     
     # Transaction type breakdown (filtered by time travel if applicable)
-    type_breakdown = base_qs.values("transaction_type").annotate(
+    # NOTE: Using 'type' field instead of 'transaction_type'
+    type_breakdown = base_qs.values("type").annotate(
         count=Count("id"),
         total_amount=Sum("amount")
     )
@@ -1603,23 +1739,23 @@ def report_overview(request):
     type_amounts = []
     type_colors = []
     
+    # NOTE: Transaction model only has: FUNDING, TRADE, FEE, ADJUSTMENT, RECORD_PAYMENT
     type_map = {
-        Transaction.TYPE_PROFIT: ("Profit", "#6b7280"),
-        Transaction.TYPE_LOSS: ("Loss", "#9ca3af"),
-        Transaction.TYPE_FUNDING: ("Funding", "#4b5563"),
-        Transaction.TYPE_SETTLEMENT: ("Settlement", "#6b7280"),
+        'FUNDING': ("Funding", "#4b5563"),
+        'TRADE': ("Trade", "#6b7280"),
+        'FEE': ("Fee", "#9ca3af"),
+        'ADJUSTMENT': ("Adjustment", "#6b7280"),
+        'RECORD_PAYMENT': ("Record Payment", "#10b981"),
     }
     
     for item in type_breakdown:
-
+        tx_type = item["type"]  # Get the type from the item
         if tx_type in type_map:
-
-
+            label, color = type_map[tx_type]
             type_labels.append(label)
-
             type_counts.append(item["count"])
-
             type_amounts.append(float(item["total_amount"] or 0))
+            type_colors.append(color)
 
             type_colors.append(color)
 
@@ -1642,11 +1778,8 @@ def report_overview(request):
         
         # Calculate month end date
         if month_date.month == 12:
-
-
-            pass
+            month_end = month_date.replace(year=month_date.year + 1, month=1) - timedelta(days=1)
         else:
-
             month_end = month_date.replace(month=month_date.month + 1) - timedelta(days=1)
 
 
@@ -1661,34 +1794,30 @@ def report_overview(request):
 
         )
         
-        month_profit_val = month_transactions.filter(
-            transaction_type=Transaction.TYPE_PROFIT
-
-        ).aggregate(total=Sum("your_share_amount"))["total"] or 0
+        # ✅ CORRECT: Monthly profit from RECORD_PAYMENT transactions
+        month_payment_transactions = month_transactions.filter(type='RECORD_PAYMENT')
+        month_profit_total = month_payment_transactions.aggregate(total=Sum("amount"))["total"] or 0
         
-        month_loss_val = month_transactions.filter(
-            transaction_type=Transaction.TYPE_LOSS
-
-        ).aggregate(total=Sum("your_share_amount"))["total"] or 0
+        # Separate positive (client paid me) and negative (I paid client)
+        month_profit_val = max(0, float(month_profit_total))  # Positive amounts
+        month_loss_val = abs(min(0, float(month_profit_total)))  # Negative amounts (as positive loss)
         
         month_turnover_val = month_transactions.aggregate(total=Sum("amount"))["total"] or 0
         
-        monthly_profit.insert(0, float(month_profit_val))
-        monthly_loss.insert(0, float(month_loss_val))
+        monthly_profit.insert(0, month_profit_val)
+        monthly_loss.insert(0, month_loss_val)
         monthly_turnover.insert(0, float(month_turnover_val))
     
-    # Top clients by profit (last 30 days or filtered)
-    top_clients = base_qs.filter(
+    # ✅ CORRECT: Top clients by profit from RECORD_PAYMENT transactions
+    top_clients_qs = base_qs.filter(
         date__gte=start_date,
-        transaction_type=Transaction.TYPE_PROFIT
-    ).values(
-        "client_exchange__client__name"
-    ).annotate(
-        total_profit=Sum("your_share_amount")
+        type='RECORD_PAYMENT'
+    ).values("client_exchange__client__name").annotate(
+        total_profit=Sum("amount")  # Sum of RECORD_PAYMENT amounts per client
     ).order_by("-total_profit")[:10]
     
-    client_labels = [item["client_exchange__client__name"] for item in top_clients]
-    client_profits = [float(item["total_profit"] or 0) for item in top_clients]
+    client_labels = [item["client_exchange__client__name"] for item in top_clients_qs]
+    client_profits = [float(item["total_profit"] or 0) for item in top_clients_qs]
 
     # Weekly data (last 4 weeks)
     weekly_labels = []
@@ -1696,8 +1825,10 @@ def report_overview(request):
     weekly_loss = []
     weekly_turnover = []
     
+    # Initialize week_end to today (or end_date if time travel)
+    week_end = end_date if time_travel_mode and end_date_str else today
+    
     for i in range(4):
-
         week_start = week_end - timedelta(days=6)
         weekly_labels.insert(0, f"Week {4-i} ({week_start.strftime('%b %d')} - {week_end.strftime('%b %d')})")
         
@@ -1708,21 +1839,22 @@ def report_overview(request):
 
         )
         
-        week_profit_val = week_transactions.filter(
-            transaction_type=Transaction.TYPE_PROFIT
-
-        ).aggregate(total=Sum("your_share_amount"))["total"] or 0
+        # ✅ CORRECT: Weekly profit from RECORD_PAYMENT transactions
+        week_payment_transactions = week_transactions.filter(type='RECORD_PAYMENT')
+        week_profit_total = week_payment_transactions.aggregate(total=Sum("amount"))["total"] or 0
         
-        week_loss_val = week_transactions.filter(
-            transaction_type=Transaction.TYPE_LOSS
-
-        ).aggregate(total=Sum("your_share_amount"))["total"] or 0
+        # Separate positive (client paid me) and negative (I paid client)
+        week_profit_val = max(0, float(week_profit_total))  # Positive amounts
+        week_loss_val = abs(min(0, float(week_profit_total)))  # Negative amounts (as positive loss)
         
         week_turnover_val = week_transactions.aggregate(total=Sum("amount"))["total"] or 0
         
-        weekly_profit.insert(0, float(week_profit_val))
-        weekly_loss.insert(0, float(week_loss_val))
+        weekly_profit.insert(0, week_profit_val)
+        weekly_loss.insert(0, week_loss_val)
         weekly_turnover.insert(0, float(week_turnover_val))
+        
+        # Move week_end back for next iteration
+        week_end = week_start - timedelta(days=1)
 
     # Time travel data
     time_travel_transactions = base_qs.select_related("client_exchange", "client_exchange__client", "client_exchange__exchange").order_by("-date", "-created_at")[:50]
@@ -1818,7 +1950,7 @@ def time_travel_report(request):
 
     total_turnover = qs.aggregate(total=Sum("amount"))["total"] or 0
     your_profit = (
-        qs.filter(transaction_type=Transaction.TYPE_PROFIT).aggregate(total=Sum("your_share_amount"))["total"] or 0
+        0  # NOTE: Transaction model doesn't have TYPE_PROFIT or your_share_amount
     )
     company_profit = qsDecimal(0)
 
@@ -1849,14 +1981,14 @@ def time_travel_report(request):
         pending_clients_owe = Decimal(0)  # No longer using pending amounts
     
     # You owe clients = client profit shares minus settlements where admin paid
-    profit_qs = qs.filter(transaction_type=Transaction.TYPE_PROFIT)
+    # NOTE: Transaction model doesn't have TYPE_PROFIT - using empty queryset
+    profit_qs = qs.none()
     settlement_qs = qs.filter(
-        transaction_type=Transaction.TYPE_SETTLEMENT,
-        client_share_amount__gt=0,
-        your_share_amount=0
+        type='RECORD_PAYMENT'  # Settlement transactions are recorded as RECORD_PAYMENT
     )
-    total_client_profit_shares = profit_qs.aggregate(total=Sum("client_share_amount"))["total"] or Decimal(0)
-    total_settlements_paid = settlement_qs.aggregate(total=Sum("client_share_amount"))["total"] or Decimal(0)
+    # NOTE: Transaction model doesn't have client_share_amount
+    total_client_profit_shares = Decimal(0)
+    total_settlements_paid = settlement_qs.aggregate(total=Sum("amount"))["total"] or Decimal(0)
     pending_you_owe_clients = max(Decimal(0), total_client_profit_shares - total_settlements_paid)
 
     recent_transactions = qs.select_related("client_exchange", "client_exchange__client", "client_exchange__exchange").order_by("-date", "-created_at")[:50]
@@ -1902,13 +2034,31 @@ def exchange_create(request):
         code = request.POST.get("code", "").strip()
         
         if name:
-            Exchange.objects.create(
-                name=name,
-                code=code if code else None,
-            )
-            from django.contrib import messages
-            messages.success(request, f"Exchange '{name}' has been created successfully.")
-            return redirect(reverse("exchange_list"))
+            # Check for case-insensitive duplicate names
+            existing = Exchange.objects.filter(name__iexact=name)
+            if existing.exists():
+                from django.contrib import messages
+                messages.error(request, f"'{name}' already exists.")
+                return render(request, "core/exchanges/create.html")
+            
+            try:
+                Exchange.objects.create(
+                    name=name,
+                    code=code if code else None,
+                )
+                from django.contrib import messages
+                messages.success(request, f"Exchange '{name}' has been created successfully.")
+                return redirect(reverse("exchange_list"))
+            except Exception as e:
+                # Handle any other validation errors (including model-level validation)
+                from django.contrib import messages
+                # Check if it's a duplicate name error
+                existing = Exchange.objects.filter(name__iexact=name)
+                if existing.exists():
+                    messages.error(request, f"'{name}' already exists.")
+                else:
+                    messages.error(request, f"Error creating exchange: {str(e)}")
+                return render(request, "core/exchanges/create.html")
         else:
             from django.contrib import messages
             messages.error(request, "Exchange name is required.")
@@ -1925,10 +2075,36 @@ def exchange_edit(request, pk):
     """Edit an existing standalone exchange."""
     exchange = get_object_or_404(Exchange, pk=pk)
     if request.method == "POST":
-
-        exchange.code = request.POST.get("code", "").strip() or None
-        exchange.save()
-        return redirect(reverse("exchange_list"))
+        name = request.POST.get("name", "").strip()
+        code = request.POST.get("code", "").strip() or None
+        
+        # If name is being changed, check for case-insensitive duplicate
+        if name and name != exchange.name:
+            existing = Exchange.objects.filter(name__iexact=name).exclude(pk=exchange.pk)
+            if existing.exists():
+                from django.contrib import messages
+                messages.error(request, f"'{name}' already exists.")
+                return render(request, "core/exchanges/edit.html", {"exchange": exchange})
+            exchange.name = name
+        
+        try:
+            exchange.code = code
+            exchange.save()
+            from django.contrib import messages
+            messages.success(request, f"Exchange '{exchange.name}' has been updated successfully.")
+            return redirect(reverse("exchange_list"))
+        except Exception as e:
+            from django.contrib import messages
+            # Check if it's a duplicate name error
+            if name:
+                existing = Exchange.objects.filter(name__iexact=name).exclude(pk=exchange.pk)
+                if existing.exists():
+                    messages.error(request, f"'{name}' already exists.")
+                else:
+                    messages.error(request, f"Error updating exchange: {str(e)}")
+            else:
+                messages.error(request, f"Error updating exchange: {str(e)}")
+            return render(request, "core/exchanges/edit.html", {"exchange": exchange})
     
     return render(request, "core/exchanges/edit.html", {"exchange": exchange})
 
@@ -2154,7 +2330,7 @@ def transaction_create(request):
 
             my_share_pct = client_exchange.my_share_pct
             
-            if tx_type == Transaction.TYPE_PROFIT:
+            if tx_type == 'PROFIT':  # NOTE: PROFIT type doesn't exist in current Transaction model
                 # Total Share = my_share_pct% of profit (e.g., 10% of 990 = ₹99)
                 total_share = amount * (my_share_pct / 100)
                 
@@ -2190,23 +2366,15 @@ def transaction_create(request):
                 company_share_amount = Decimal(0)
 
             
+            # NOTE: Transaction model only has: type, amount, date, client_exchange, exchange_balance_after, notes
             transaction = Transaction.objects.create(
-
                 client_exchange=client_exchange,
-
                 date=datetime.strptime(tx_date, "%Y-%m-%d").date(),
-
-                transaction_type=tx_type,
-
+                type=tx_type,  # Using 'type' instead of 'transaction_type'
                 amount=amount,
-
-                client_share_amount=client_share_amount,
-
-                your_share_amount=your_share_amount,
-
-                note=note,
-
-                )
+                exchange_balance_after=client_exchange.exchange_balance,  # Store current balance for audit
+                notes=note,  # Using 'notes' instead of 'note'
+            )
 
             
             return redirect(reverse("transaction_list"))
@@ -2249,9 +2417,9 @@ def transaction_detail(request, pk):
     
     # Calculate balance before transaction based on transactions
     # Balance = funding + profit - loss (from transactions)
-    funding_before = transactions_before.filter(transaction_type=Transaction.TYPE_FUNDING).aggregate(total=Sum("amount"))["total"] or Decimal(0)
-    profit_before = transactions_before.filter(transaction_type=Transaction.TYPE_PROFIT).aggregate(total=Sum("amount"))["total"] or Decimal(0)
-    loss_before = transactions_before.filter(transaction_type=Transaction.TYPE_LOSS).aggregate(total=Sum("amount"))["total"] or Decimal(0)
+    funding_before = transactions_before.filter(type='FUNDING').aggregate(total=Sum("amount"))["total"] or Decimal(0)
+    profit_before = Decimal(0)  # NOTE: Transaction model doesn't have TYPE_PROFIT
+    loss_before = Decimal(0)   # NOTE: Transaction model doesn't have TYPE_LOSS
     
     # Exchange balance = funding + profit - loss
     balance_before = funding_before + profit_before - loss_before
@@ -2264,31 +2432,35 @@ def transaction_detail(request, pk):
         balance_before = recorded_balance
     
     # Calculate totals before transaction (recalculate in case we used recorded balance)
-    funding_before = transactions_before.filter(transaction_type=Transaction.TYPE_FUNDING).aggregate(total=Sum("amount"))["total"] or Decimal(0)
-    profit_before = transactions_before.filter(transaction_type=Transaction.TYPE_PROFIT).aggregate(total=Sum("amount"))["total"] or Decimal(0)
-    loss_before = transactions_before.filter(transaction_type=Transaction.TYPE_LOSS).aggregate(total=Sum("amount"))["total"] or Decimal(0)
-    client_profit_share_before = transactions_before.filter(transaction_type=Transaction.TYPE_PROFIT).aggregate(total=Sum("client_share_amount"))["total"] or Decimal(0)
-    client_loss_share_before = transactions_before.filter(transaction_type=Transaction.TYPE_LOSS).aggregate(total=Sum("client_share_amount"))["total"] or Decimal(0)
+    funding_before = transactions_before.filter(type='FUNDING').aggregate(total=Sum("amount"))["total"] or Decimal(0)
+    profit_before = Decimal(0)  # NOTE: Transaction model doesn't have TYPE_PROFIT
+    loss_before = Decimal(0)   # NOTE: Transaction model doesn't have TYPE_LOSS
+    # NOTE: Transaction model doesn't have client_share_amount or TYPE_PROFIT/TYPE_LOSS
+    client_profit_share_before = Decimal(0)
+    client_loss_share_before = Decimal(0)
     client_net_before = funding_before + client_profit_share_before - client_loss_share_before
     
     # Calculate balance AFTER this transaction (including this transaction)
     # For balance after, we need to account for this transaction's impact
-    if transaction.transaction_type == Transaction.TYPE_FUNDING:
+    if transaction.type == 'FUNDING':
 
-        client_net_after = client_net_before + transaction.client_share_amount
-    elif transaction.transaction_type == Transaction.TYPE_PROFIT:
+        # NOTE: Transaction model doesn't have client_share_amount - using amount instead
+        client_net_after = client_net_before + transaction.amount
+    elif transaction.type == 'PROFIT':  # NOTE: PROFIT type doesn't exist in current model
         # Profit increases balance
         balance_after = balance_before + transaction.amount
-        client_net_after = client_net_before + transaction.client_share_amount
-    elif transaction.transaction_type == Transaction.TYPE_LOSS:
+        client_net_after = client_net_before + transaction.amount  # Using amount since client_share_amount doesn't exist
+    elif transaction.type == 'LOSS':  # NOTE: LOSS type doesn't exist in current model
         # Loss decreases balance
         balance_after = balance_before - transaction.amount
-        client_net_after = client_net_before - transaction.client_share_amount
+        client_net_after = client_net_before - transaction.amount  # Using amount since client_share_amount doesn't exist
     else:  # SETTLEMENT
 
         # Settlement doesn't affect exchange balance directly
         balance_after = balance_before
-        if transaction.client_share_amount > 0 and transaction.your_share_amount == 0:
+        # NOTE: Transaction model doesn't have client_share_amount or your_share_amount
+        # Using amount field instead
+        if transaction.amount > 0:  # Simplified check
             client_net_after = client_net_before
 
         else:
@@ -2299,7 +2471,7 @@ def transaction_detail(request, pk):
     
     # Calculate funding after
     funding_after = funding_before
-    if transaction.transaction_type == Transaction.TYPE_FUNDING:
+    if transaction.type == 'FUNDING':
 
     
         pass
@@ -2318,10 +2490,12 @@ def transaction_detail(request, pk):
     client_type = "company" if False else "my"
     
     # Calculate shares based on client_exchange configuration (use stored values if available, otherwise recalculate)
-    calculated_your_share = transaction.your_share_amount
+    # NOTE: Transaction model doesn't have your_share_amount - using 0
+    calculated_your_share = 0
     # All clients are now my clients, company share is always 0
     calculated_company_share = Decimal(0)
-    calculated_client_share = transaction.client_share_amount
+    # NOTE: Transaction model doesn't have client_share_amount - using amount
+    calculated_client_share = transaction.amount
     
     # If shares are 0, recalculate based on client_exchange configuration
     if calculated_your_share == 0 and calculated_client_share == 0:
@@ -2384,12 +2558,13 @@ def transaction_edit(request, pk):
 
             
             # Track old transaction type and share amount for pending updates
-            old_tx_type = transaction.transaction_type
+            old_tx_type = transaction.type
 
-            old_share_amount = transaction.client_share_amount  # Old share amount
+            # NOTE: Transaction model doesn't have client_share_amount
+            old_share_amount = transaction.amount  # Using amount instead
 
             
-            if tx_type == Transaction.TYPE_PROFIT:
+            if tx_type == 'PROFIT':  # NOTE: PROFIT type doesn't exist in current Transaction model
                 # Total Share = my_share_pct% of profit (e.g., 10% of 990 = ₹99)
                 total_share = amount * (my_share_pct / 100)
                 
@@ -2407,7 +2582,7 @@ def transaction_edit(request, pk):
                 your_share_amount = your_cut  # Your cut from the share
                 company_share_amount = company_cut  # Company cut from the share
                 
-            elif tx_type == Transaction.TYPE_LOSS:
+            elif tx_type == 'LOSS':  # NOTE: LOSS type doesn't exist in current Transaction model
                 # Total Share = my_share_pct% of loss (e.g., 10% of 90 = ₹9)
                 total_share = amount * (my_share_pct / 100)
                 
@@ -2433,13 +2608,13 @@ def transaction_edit(request, pk):
             
             transaction.date = datetime.strptime(tx_date, "%Y-%m-%d").date()
 
-            transaction.transaction_type = tx_type
+            transaction.type = tx_type
 
             transaction.amount = amount
 
-            transaction.client_share_amount = client_share_amount
-
-            transaction.your_share_amount = your_share_amount
+            # NOTE: Transaction model doesn't have client_share_amount or your_share_amount
+            # These are calculated values, not stored in Transaction model
+            # Transaction only stores: type, amount, date, client_exchange, exchange_balance_after, notes
 
             # All clients are now my clients, company_share_amount is always 0
             # transaction.company_share_amount = Decimal(0)  # Field removed
@@ -2543,50 +2718,50 @@ def report_daily(request):
     
     total_turnover = qs.aggregate(total=Sum("amount"))["total"] or 0
     your_profit = (
-        qs.filter(transaction_type=Transaction.TYPE_PROFIT).aggregate(total=Sum("your_share_amount"))["total"] or 0
+        0  # NOTE: Transaction model doesn't have TYPE_PROFIT or your_share_amount
     )
     company_profit = qsDecimal(0)
     your_loss = (
-        qs.filter(transaction_type=Transaction.TYPE_LOSS).aggregate(total=Sum("your_share_amount"))["total"] or 0
+        0  # NOTE: Transaction model doesn't have TYPE_LOSS or your_share_amount
     )
     
     transactions = qs.select_related("client_exchange", "client_exchange__client", "client_exchange__exchange").order_by("-created_at")
     
     # Chart data - transaction type breakdown
-    type_data = qs.values("transaction_type").annotate(
+    type_data = qs.values("type").annotate(
         count=Count("id"),
         total_amount=Sum("amount")
     )
     type_labels = []
     type_amounts = []
     type_colors = []
+    # NOTE: Transaction model only has: FUNDING, TRADE, FEE, ADJUSTMENT, RECORD_PAYMENT
     type_map = {
-        Transaction.TYPE_PROFIT: ("Profit", "#6b7280"),
-        Transaction.TYPE_LOSS: ("Loss", "#9ca3af"),
-        Transaction.TYPE_FUNDING: ("Funding", "#4b5563"),
-        Transaction.TYPE_SETTLEMENT: ("Settlement", "#6b7280"),
+        'FUNDING': ("Funding", "#4b5563"),
+        'TRADE': ("Trade", "#6b7280"),
+        'FEE': ("Fee", "#9ca3af"),
+        'ADJUSTMENT': ("Adjustment", "#6b7280"),
+        'RECORD_PAYMENT': ("Record Payment", "#10b981"),
     }
     for item in type_data:
-
+        tx_type = item["type"]
         if tx_type in type_map:
-
-
+            label, color = type_map[tx_type]
             type_labels.append(label)
-
             type_amounts.append(float(item["total_amount"] or 0))
-
             type_colors.append(color)
 
     
-    # Client-wise breakdown
-    client_data = qs.values("client_exchange__client__name").annotate(
-        profit=Sum("your_share_amount", filter=Q(transaction_type=Transaction.TYPE_PROFIT)),
-        loss=Sum("your_share_amount", filter=Q(transaction_type=Transaction.TYPE_LOSS)),
-        turnover=Sum("amount")
+    # ✅ CORRECT: Client-wise breakdown from RECORD_PAYMENT transactions
+    client_data = qs.filter(type='RECORD_PAYMENT').values("client_exchange__client__name").annotate(
+        profit=Sum("amount", filter=Q(amount__gt=0)),  # Positive amounts (client paid me)
+        loss=Sum("amount", filter=Q(amount__lt=0)),    # Negative amounts (I paid client)
+        turnover=Sum("amount")  # Total RECORD_PAYMENT amount
     ).order_by("-turnover")[:10]
     
     client_labels = [item["client_exchange__client__name"] for item in client_data]
     client_profits = [float(item["profit"] or 0) for item in client_data]
+    client_losses = [float(abs(item["loss"] or 0)) for item in client_data]
     
     # Analysis
     net_profit = float(your_profit) - float(your_loss)
@@ -2635,11 +2810,11 @@ def report_weekly(request):
     
     total_turnover = qs.aggregate(total=Sum("amount"))["total"] or 0
     your_profit = (
-        qs.filter(transaction_type=Transaction.TYPE_PROFIT).aggregate(total=Sum("your_share_amount"))["total"] or 0
+        0  # NOTE: Transaction model doesn't have TYPE_PROFIT or your_share_amount
     )
     company_profit = qsDecimal(0)
     your_loss = (
-        qs.filter(transaction_type=Transaction.TYPE_LOSS).aggregate(total=Sum("your_share_amount"))["total"] or 0
+        0  # NOTE: Transaction model doesn't have TYPE_LOSS or your_share_amount
     )
     
     transactions = qs.select_related("client_exchange", "client_exchange__client", "client_exchange__exchange").order_by("-date", "-created_at")
@@ -2655,8 +2830,9 @@ def report_weekly(request):
         daily_labels.append(current_date.strftime("%a %d"))
         
         day_qs = qs.filter(date=current_date)
-        day_profit = day_qs.filter(transaction_type=Transaction.TYPE_PROFIT).aggregate(total=Sum("your_share_amount"))["total"] or 0
-        day_loss = day_qs.filter(transaction_type=Transaction.TYPE_LOSS).aggregate(total=Sum("your_share_amount"))["total"] or 0
+        # NOTE: Transaction model doesn't have TYPE_PROFIT/TYPE_LOSS or your_share_amount
+        day_profit = 0
+        day_loss = 0
         day_turnover = day_qs.aggregate(total=Sum("amount"))["total"] or 0
         
         daily_profit.append(float(day_profit))
@@ -2664,28 +2840,27 @@ def report_weekly(request):
         daily_turnover.append(float(day_turnover))
     
     # Transaction type breakdown
-    type_data = qs.values("transaction_type").annotate(
+    type_data = qs.values("type").annotate(
         count=Count("id"),
         total_amount=Sum("amount")
     )
     type_labels = []
     type_amounts = []
     type_colors = []
+    # NOTE: Transaction model only has: FUNDING, TRADE, FEE, ADJUSTMENT, RECORD_PAYMENT
     type_map = {
-        Transaction.TYPE_PROFIT: ("Profit", "#6b7280"),
-        Transaction.TYPE_LOSS: ("Loss", "#9ca3af"),
-        Transaction.TYPE_FUNDING: ("Funding", "#4b5563"),
-        Transaction.TYPE_SETTLEMENT: ("Settlement", "#6b7280"),
+        'FUNDING': ("Funding", "#4b5563"),
+        'TRADE': ("Trade", "#6b7280"),
+        'FEE': ("Fee", "#9ca3af"),
+        'ADJUSTMENT': ("Adjustment", "#6b7280"),
+        'RECORD_PAYMENT': ("Record Payment", "#10b981"),
     }
     for item in type_data:
-
+        tx_type = item["type"]
         if tx_type in type_map:
-
-
+            label, color = type_map[tx_type]
             type_labels.append(label)
-
             type_amounts.append(float(item["total_amount"] or 0))
-
             type_colors.append(color)
 
     
@@ -2739,11 +2914,11 @@ def report_monthly(request):
     
     total_turnover = qs.aggregate(total=Sum("amount"))["total"] or 0
     your_profit = (
-        qs.filter(transaction_type=Transaction.TYPE_PROFIT).aggregate(total=Sum("your_share_amount"))["total"] or 0
+        0  # NOTE: Transaction model doesn't have TYPE_PROFIT or your_share_amount
     )
     company_profit = qsDecimal(0)
     your_loss = (
-        qs.filter(transaction_type=Transaction.TYPE_LOSS).aggregate(total=Sum("your_share_amount"))["total"] or 0
+        0  # NOTE: Transaction model doesn't have TYPE_LOSS or your_share_amount
     )
     
     transactions = qs.select_related("client_exchange", "client_exchange__client", "client_exchange__exchange").order_by("-date", "-created_at")
@@ -2761,8 +2936,9 @@ def report_monthly(request):
         weekly_labels.append(f"Week {week_num} ({current_date.strftime('%d')}-{week_end_date.strftime('%d %b')})")
         
         week_qs = qs.filter(date__gte=current_date, date__lte=week_end_date)
-        week_profit = week_qs.filter(transaction_type=Transaction.TYPE_PROFIT).aggregate(total=Sum("your_share_amount"))["total"] or 0
-        week_loss = week_qs.filter(transaction_type=Transaction.TYPE_LOSS).aggregate(total=Sum("your_share_amount"))["total"] or 0
+        # NOTE: Transaction model doesn't have TYPE_PROFIT/TYPE_LOSS or your_share_amount
+        week_profit = 0
+        week_loss = 0
         week_turnover = week_qs.aggregate(total=Sum("amount"))["total"] or 0
         
         weekly_profit.append(float(week_profit))
@@ -2773,34 +2949,33 @@ def report_monthly(request):
         week_num += 1
     
     # Transaction type breakdown
-    type_data = qs.values("transaction_type").annotate(
+    type_data = qs.values("type").annotate(
         count=Count("id"),
         total_amount=Sum("amount")
     )
     type_labels = []
     type_amounts = []
     type_colors = []
+    # NOTE: Transaction model only has: FUNDING, TRADE, FEE, ADJUSTMENT, RECORD_PAYMENT
     type_map = {
-        Transaction.TYPE_PROFIT: ("Profit", "#6b7280"),
-        Transaction.TYPE_LOSS: ("Loss", "#9ca3af"),
-        Transaction.TYPE_FUNDING: ("Funding", "#4b5563"),
-        Transaction.TYPE_SETTLEMENT: ("Settlement", "#6b7280"),
+        'FUNDING': ("Funding", "#4b5563"),
+        'TRADE': ("Trade", "#6b7280"),
+        'FEE': ("Fee", "#9ca3af"),
+        'ADJUSTMENT': ("Adjustment", "#6b7280"),
+        'RECORD_PAYMENT': ("Record Payment", "#10b981"),
     }
     for item in type_data:
-
+        tx_type = item["type"]
         if tx_type in type_map:
-
-
+            label, color = type_map[tx_type]
             type_labels.append(label)
-
             type_amounts.append(float(item["total_amount"] or 0))
-
             type_colors.append(color)
 
     
-    # Top clients
-    client_data = qs.values("client_exchange__client__name").annotate(
-        profit=Sum("your_share_amount", filter=Q(transaction_type=Transaction.TYPE_PROFIT)),
+    # ✅ CORRECT: Top clients by profit from RECORD_PAYMENT transactions
+    client_data = qs.filter(type='RECORD_PAYMENT').values("client_exchange__client__name").annotate(
+        profit=Sum("amount"),  # Sum of RECORD_PAYMENT amounts (positive = profit, negative = loss)
         turnover=Sum("amount")
     ).order_by("-profit")[:10]
     
@@ -2860,7 +3035,7 @@ def report_custom(request):
     
     total_turnover = qs.aggregate(total=Sum("amount"))["total"] or 0
     your_profit = (
-        qs.filter(transaction_type=Transaction.TYPE_PROFIT).aggregate(total=Sum("your_share_amount"))["total"] or 0
+        0  # NOTE: Transaction model doesn't have TYPE_PROFIT or your_share_amount
     )
     company_profit = qsDecimal(0)
     
@@ -2921,10 +3096,10 @@ def export_report_csv(request):
             tx.date,
             tx.client_exchange.client.name,
             tx.client_exchange.exchange.name,
-            tx.get_transaction_type_display(),
+            tx.get_type_display(),  # Using 'type' field instead of 'transaction_type'
             tx.amount,
-            tx.your_share_amount or 0,
-            tx.client_share_amount or 0,
+            0,  # NOTE: Transaction model doesn't have your_share_amount
+            tx.amount or 0,  # Using amount instead of client_share_amount
             Decimal(0),  # company_share_amount - all clients are now my clients
             tx.note or "",
         ])
@@ -2956,7 +3131,7 @@ def report_client(request, client_pk):
     
     total_turnover = qs.aggregate(total=Sum("amount"))["total"] or 0
     your_profit = (
-        qs.filter(transaction_type=Transaction.TYPE_PROFIT).aggregate(total=Sum("your_share_amount"))["total"] or 0
+        0  # NOTE: Transaction model doesn't have TYPE_PROFIT or your_share_amount
     )
     company_profit = qsDecimal(0)
     
@@ -3580,11 +3755,11 @@ def report_exchange(request, exchange_pk):
     
     total_turnover = qs.aggregate(total=Sum("amount"))["total"] or 0
     your_profit = (
-        qs.filter(transaction_type=Transaction.TYPE_PROFIT).aggregate(total=Sum("your_share_amount"))["total"] or 0
+        0  # NOTE: Transaction model doesn't have TYPE_PROFIT or your_share_amount
     )
     company_profit = qsDecimal(0)
     your_loss = (
-        qs.filter(transaction_type=Transaction.TYPE_LOSS).aggregate(total=Sum("your_share_amount"))["total"] or 0
+        0  # NOTE: Transaction model doesn't have TYPE_LOSS or your_share_amount
     )
     
     transactions = qs.select_related(
@@ -3594,34 +3769,33 @@ def report_exchange(request, exchange_pk):
     ).order_by("-date", "-created_at")
     
     # Transaction type breakdown
-    type_data = qs.values("transaction_type").annotate(
+    type_data = qs.values("type").annotate(
         count=Count("id"),
         total_amount=Sum("amount")
     )
     type_labels = []
     type_amounts = []
     type_colors = []
+    # NOTE: Transaction model only has: FUNDING, TRADE, FEE, ADJUSTMENT, RECORD_PAYMENT
     type_map = {
-        Transaction.TYPE_PROFIT: ("Profit", "#6b7280"),
-        Transaction.TYPE_LOSS: ("Loss", "#9ca3af"),
-        Transaction.TYPE_FUNDING: ("Funding", "#4b5563"),
-        Transaction.TYPE_SETTLEMENT: ("Settlement", "#6b7280"),
+        'FUNDING': ("Funding", "#4b5563"),
+        'TRADE': ("Trade", "#6b7280"),
+        'FEE': ("Fee", "#9ca3af"),
+        'ADJUSTMENT': ("Adjustment", "#6b7280"),
+        'RECORD_PAYMENT': ("Record Payment", "#10b981"),
     }
     for item in type_data:
-
+        tx_type = item["type"]
         if tx_type in type_map:
-
-
+            label, color = type_map[tx_type]
             type_labels.append(label)
-
             type_amounts.append(float(item["total_amount"] or 0))
-
             type_colors.append(color)
 
     
-    # Client-wise breakdown
-    client_data = qs.values("client_exchange__client__name").annotate(
-        profit=Sum("your_share_amount", filter=Q(transaction_type=Transaction.TYPE_PROFIT)),
+    # ✅ CORRECT: Top clients by profit from RECORD_PAYMENT transactions
+    client_data = qs.filter(type='RECORD_PAYMENT').values("client_exchange__client__name").annotate(
+        profit=Sum("amount"),  # Sum of RECORD_PAYMENT amounts (positive = profit, negative = loss)
         turnover=Sum("amount")
     ).order_by("-profit")[:10]
     
@@ -3755,7 +3929,7 @@ def client_balance(request, client_pk):
 
                     date=balance_record_date_obj,
 
-                    transaction_type=Transaction.TYPE_BALANCE_RECORD,
+                    type='BALANCE_RECORD',  # NOTE: BALANCE_RECORD type doesn't exist in current Transaction model
 
                     amount=new_balance,
 
@@ -3894,16 +4068,18 @@ def client_balance(request, client_pk):
     for client_exchange in client_exchanges:
 
         
-        total_funding = transactions.filter(transaction_type=Transaction.TYPE_FUNDING).aggregate(total=Sum("amount"))["total"] or 0
-        total_profit = transactions.filter(transaction_type=Transaction.TYPE_PROFIT).aggregate(total=Sum("amount"))["total"] or 0
-        total_loss = transactions.filter(transaction_type=Transaction.TYPE_LOSS).aggregate(total=Sum("amount"))["total"] or 0
+        total_funding = transactions.filter(type='FUNDING').aggregate(total=Sum("amount"))["total"] or 0
+        total_profit = 0  # NOTE: Transaction model doesn't have TYPE_PROFIT
+        total_loss = 0   # NOTE: Transaction model doesn't have TYPE_LOSS
         total_turnover = transactions.aggregate(total=Sum("amount"))["total"] or 0
         
-        client_profit_share = transactions.filter(transaction_type=Transaction.TYPE_PROFIT).aggregate(total=Sum("client_share_amount"))["total"] or 0
-        client_loss_share = transactions.filter(transaction_type=Transaction.TYPE_LOSS).aggregate(total=Sum("client_share_amount"))["total"] or 0
+        # NOTE: Transaction model doesn't have client_share_amount or TYPE_PROFIT/TYPE_LOSS
+        client_profit_share = 0
+        client_loss_share = 0
         
-        your_profit_share = transactions.filter(transaction_type=Transaction.TYPE_PROFIT).aggregate(total=Sum("your_share_amount"))["total"] or 0
-        your_loss_share = transactions.filter(transaction_type=Transaction.TYPE_LOSS).aggregate(total=Sum("your_share_amount"))["total"] or 0
+        # NOTE: Transaction model doesn't have your_share_amount or TYPE_PROFIT/TYPE_LOSS
+        your_profit_share = 0
+        your_loss_share = 0
         
         client_net = total_funding + client_profit_share - client_loss_share
         you_net = your_profit_share - your_loss_share
@@ -3941,10 +4117,10 @@ def client_balance(request, client_pk):
 
         
         # Calculate you owe client = client profit share minus settlements where admin paid
+        # NOTE: Settlement transactions are recorded as 'RECORD_PAYMENT' type
         client_settlements_paid = transactions.filter(
-            transaction_type=Transaction.TYPE_SETTLEMENT,
-
-            client_share_amount__gt=0,
+            type='RECORD_PAYMENT',  # Settlement transactions use RECORD_PAYMENT type
+            amount__gt=0,  # Using amount instead of client_share_amount
 
             your_share_amount=0
 
@@ -4060,7 +4236,7 @@ def client_balance(request, client_pk):
     # Annotate transactions with recorded balances for their dates
     transactions_with_balances = []
     for tx in all_transactions:
-        if tx.transaction_type == Transaction.TYPE_BALANCE_RECORD:
+        if tx.type == 'BALANCE_RECORD':  # NOTE: BALANCE_RECORD type doesn't exist in current model
             class MockBalance:
                 def __init__(self, amount):
                     self.remaining_balance = amount

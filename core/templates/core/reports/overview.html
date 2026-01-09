@@ -222,8 +222,11 @@
     </div>
         <div class="stat-box profit">
         <div class="stat-label">Your Total Profit</div>
-        <div class="stat-value">₹ {{ your_total_profit|default:0|floatformat:1 }}</div>
-        <div class="stat-note">Your net earnings (income from losses - expense from profits)</div>
+        <div class="stat-value {% if your_total_profit >= 0 %}positive{% else %}negative{% endif %}">₹ {{ your_total_profit|default:0|floatformat:1 }}</div>
+        <div class="stat-note">
+            Cash-flow based: Money received from clients (₹{{ your_total_income_from_clients|default:0|floatformat:1 }}) 
+            - Money paid to clients (₹{{ your_total_paid_to_clients|default:0|floatformat:1 }})
+        </div>
     </div>
     {% if client_type_filter != 'my' %}
         <div class="stat-box profit">

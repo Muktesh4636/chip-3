@@ -20,6 +20,13 @@ class TimeStampedModel(models.Model):
 class Client(TimeStampedModel):
     """
     Client entity - trades on exchange, receives FULL profit, pays FULL loss.
+    
+    Rules:
+    - Client code must be UNIQUE if provided (non-NULL)
+    - Client code can be EMPTY/NULL
+    - Multiple clients can have the same name
+    - If client code is NULL, the index (ID) will always be different
+    - Two clients must NEVER have the same non-NULL client code
     """
     name = models.CharField(max_length=200)
     code = models.CharField(max_length=50, blank=True, null=True, unique=True)
@@ -32,6 +39,51 @@ class Client(TimeStampedModel):
     
     def __str__(self):
         return self.name
+    
+    def clean(self):
+        """
+        Validate client code uniqueness.
+        
+        Rules:
+        - Code must be unique if provided (non-NULL)
+        - Empty string codes are converted to None
+        - Multiple NULL codes are allowed
+        """
+        from django.core.exceptions import ValidationError
+        
+        # Strip code if provided
+        if self.code:
+            self.code = self.code.strip()
+            # Convert empty string to None
+            if not self.code:
+                self.code = None
+        
+        # If code is provided (non-NULL), check for duplicates
+        if self.code is not None:
+            # Check for existing clients with same code
+            existing = Client.objects.filter(code=self.code)
+            # Exclude self if updating
+            if self.pk:
+                existing = existing.exclude(pk=self.pk)
+            
+            if existing.exists():
+                existing_client = existing.first()
+                raise ValidationError(
+                    f"Client code '{self.code}' is already in use by client '{existing_client.name}'. "
+                    f"Please choose a different code or leave it blank."
+                )
+    
+    def save(self, *args, **kwargs):
+        """Override save to ensure clean() is called and code is properly handled."""
+        # Clean code: strip whitespace and convert empty to None
+        if self.code:
+            self.code = self.code.strip()
+            if not self.code:
+                self.code = None
+        
+        # Run validation
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 
 class Exchange(TimeStampedModel):
@@ -43,6 +95,38 @@ class Exchange(TimeStampedModel):
     
     class Meta:
         ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['name'],
+                name='unique_exchange_name_case_insensitive',
+                condition=models.Q(name__isnull=False),
+            )
+        ]
+    
+    def clean(self):
+        """
+        Validate that exchange name is unique (case-insensitive).
+        """
+        from django.core.exceptions import ValidationError
+        
+        if self.name:
+            # Check for case-insensitive duplicate names
+            existing = Exchange.objects.filter(name__iexact=self.name)
+            if self.pk:
+                # Exclude current instance when updating
+                existing = existing.exclude(pk=self.pk)
+            
+            if existing.exists():
+                raise ValidationError(
+                    f"'{self.name}' already exists."
+                )
+    
+    def save(self, *args, **kwargs):
+        """
+        Override save to call clean() and enforce case-insensitive uniqueness.
+        """
+        self.full_clean()
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return self.name
@@ -195,6 +279,24 @@ class ClientExchangeAccount(TimeStampedModel):
         """
         client_pnl = self.compute_client_pnl()
         
+        # CRITICAL FIX: PnL magnitude reduction should reset cycle (trading reduced exposure)
+        # If PnL magnitude reduced significantly, old lock is invalid
+        if self.locked_initial_pnl is not None and client_pnl != 0:
+            locked_pnl_abs = abs(self.locked_initial_pnl)
+            current_pnl_abs = abs(client_pnl)
+            
+            # If PnL magnitude reduced, trading has reduced exposure → old lock invalid
+            # This prevents stale locked shares from persisting when profit/loss shrinks
+            if current_pnl_abs < locked_pnl_abs:
+                # PnL magnitude reduced → reset cycle to allow re-lock with new (smaller) PnL
+                self.locked_initial_final_share = None
+                self.locked_share_percentage = None
+                self.locked_initial_pnl = None
+                self.cycle_start_date = None
+                self.locked_initial_funding = None
+                # Save reset before continuing
+                self.save(update_fields=['locked_initial_final_share', 'locked_share_percentage', 'locked_initial_pnl', 'cycle_start_date', 'locked_initial_funding'])
+        
         # CRITICAL FIX: Funding change should reset cycle (new exposure = new cycle)
         # If funding changed after cycle was locked, reset the cycle
         if self.locked_initial_final_share is not None:
@@ -213,24 +315,14 @@ class ClientExchangeAccount(TimeStampedModel):
                     self.save(update_fields=['locked_initial_final_share', 'locked_share_percentage', 'locked_initial_pnl', 'cycle_start_date', 'locked_initial_funding'])
             else:
                 # Old data: locked_initial_funding is None (from before this fix)
-                # We can't compare, but we should set it now for future checks
-                # However, if current PnL doesn't match locked PnL, it's likely funding changed
-                # For safety, if locked_initial_funding is None, we'll set it to current funding
-                # This handles migration from old data gracefully
-                # But if PnL changed significantly, we should reset
-                current_pnl = self.compute_client_pnl()
-                if self.locked_initial_pnl is not None:
-                    # Check if PnL changed significantly (more than just trading)
-                    # If PnL magnitude changed by more than 50%, likely funding changed
-                    pnl_diff_ratio = abs(current_pnl) / abs(self.locked_initial_pnl) if self.locked_initial_pnl != 0 else float('inf')
-                    if pnl_diff_ratio > 1.5 or pnl_diff_ratio < 0.67:
-                        # Significant PnL change → likely funding changed → reset cycle
-                        self.locked_initial_final_share = None
-                        self.locked_share_percentage = None
-                        self.locked_initial_pnl = None
-                        self.cycle_start_date = None
-                        self.locked_initial_funding = None
-                        self.save(update_fields=['locked_initial_final_share', 'locked_share_percentage', 'locked_initial_pnl', 'cycle_start_date', 'locked_initial_funding'])
+                # For old data without funding tracking, we can't reliably detect funding changes
+                # The PnL magnitude reduction check above will handle trading reductions
+                # For funding increases, we'll set locked_initial_funding to current funding
+                # so future checks can detect funding changes
+                if self.locked_initial_funding is None:
+                    # Set it now for future checks (migration from old data)
+                    self.locked_initial_funding = self.funding
+                    self.save(update_fields=['locked_initial_funding'])
         
         # If no locked share exists, or PnL cycle changed (sign flip or zero crossing), lock new share
         if self.locked_initial_final_share is None or self.locked_initial_pnl is None:

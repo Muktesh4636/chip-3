@@ -68,11 +68,11 @@
             <thead>
             <tr>
                 <th>Client</th>
+                <th>Code</th>
                 <th>Exchange</th>
                 <th>Funding</th>
                 <th>Exchange Balance</th>
                 <th>Client PnL</th>
-                <th>Final Share</th>
                 <th>Remaining</th>
                 <th>Share %</th>
                 <th>Actions</th>
@@ -83,8 +83,15 @@
                 <tr>
                     <td>
                         <a href="{% url 'client_detail' item.client.pk %}" style="color: var(--accent); text-decoration: none;">
-                            {{ item.client.name }}{% if item.client.code %} ({{ item.client.code }}){% endif %}
+                            {{ item.client.name }}
                         </a>
+                    </td>
+                    <td>
+                        {% if item.client.code %}
+                            <span style="color: var(--muted); font-size: 13px;">{{ item.client.code }}</span>
+                        {% else %}
+                            <span style="color: var(--muted); font-size: 13px;">-</span>
+                        {% endif %}
                     </td>
                     <td>{{ item.exchange.name }}{% if item.exchange.code %} ({{ item.exchange.code }}){% endif %}</td>
                     <td>{{ item.account.funding|floatformat:0 }}</td>
@@ -100,13 +107,6 @@
                         {% if item.show_na %}
                             <span style="color: var(--muted);">N.A</span>
                             {% else %}
-                            <strong>{{ item.my_share_amount|floatformat:0 }}</strong>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if item.show_na %}
-                            <span style="color: var(--muted);">N.A</span>
-                        {% else %}
                             <strong style="color: var(--accent);">{{ item.remaining_amount|floatformat:0 }}</strong>
                         {% endif %}
                     </td>
@@ -150,11 +150,11 @@
             <thead>
             <tr>
                 <th>Client</th>
+                <th>Code</th>
                 <th>Exchange</th>
                 <th>Funding</th>
                 <th>Exchange Balance</th>
                 <th>Client PnL</th>
-                <th>Final Share</th>
                 <th>Remaining</th>
                 <th>Share %</th>
                 <th>Actions</th>
@@ -165,8 +165,15 @@
                 <tr>
                     <td>
                         <a href="{% url 'client_detail' item.client.pk %}" style="color: var(--accent); text-decoration: none;">
-                            {{ item.client.name }}{% if item.client.code %} ({{ item.client.code }}){% endif %}
+                            {{ item.client.name }}
                         </a>
+                    </td>
+                    <td>
+                        {% if item.client.code %}
+                            <span style="color: var(--muted); font-size: 13px;">{{ item.client.code }}</span>
+                        {% else %}
+                            <span style="color: var(--muted); font-size: 13px;">-</span>
+                        {% endif %}
                     </td>
                     <td>{{ item.exchange.name }}{% if item.exchange.code %} ({{ item.exchange.code }}){% endif %}</td>
                     <td>{{ item.account.funding|floatformat:0 }}</td>
@@ -182,13 +189,6 @@
                         {% if item.show_na %}
                             <span style="color: var(--muted);">N.A</span>
                             {% else %}
-                            <strong>{{ item.my_share_amount|floatformat:0 }}</strong>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if item.show_na %}
-                            <span style="color: var(--muted);">N.A</span>
-                        {% else %}
                             <strong style="color: var(--danger);">{{ item.remaining_amount|floatformat:0 }}</strong>
                         {% endif %}
                     </td>

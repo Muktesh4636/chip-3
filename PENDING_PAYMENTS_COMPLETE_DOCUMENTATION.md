@@ -237,7 +237,25 @@ if (client_pnl < 0) != (self.locked_initial_pnl < 0):
     # Old cycle settlements are now excluded
 ```
 
-2. **Funding changes** (NEW EXPOSURE = NEW CYCLE)
+2. **PnL magnitude reduces** (TRADING REDUCED EXPOSURE) ⭐ NEW FIX
+```python
+# CRITICAL FIX: PnL magnitude reduction should reset cycle
+if self.locked_initial_pnl is not None and client_pnl != 0:
+    locked_pnl_abs = abs(self.locked_initial_pnl)
+    current_pnl_abs = abs(client_pnl)
+    
+    if current_pnl_abs < locked_pnl_abs:
+        # PnL magnitude reduced → trading reduced exposure → old lock invalid
+        # Reset cycle to allow re-lock with new (smaller) PnL
+```
+
+**Why PnL magnitude reduction resets cycle:**
+- Trading reduced exposure = new trading outcome
+- Old locked share doesn't apply to reduced exposure
+- Example: Profit +100→+1, Share should be 10→0, not stuck at 10
+- Prevents overcharging when profit/loss shrinks
+
+3. **Funding changes** (NEW EXPOSURE = NEW CYCLE)
 ```python
 # CRITICAL FIX: Funding change should reset cycle (new exposure = new cycle)
 if self.locked_initial_final_share is not None:
@@ -247,8 +265,8 @@ if self.locked_initial_final_share is not None:
             # Funding changed → new exposure → new cycle
             # Reset all locks to force new cycle
     else:
-        # Old data: Check if PnL changed significantly (likely funding changed)
-        # If PnL magnitude changed by >50%, reset cycle
+        # Old data: Check if PnL increased significantly (>50%, likely funding changed)
+        # Reset cycle
 ```
 
 **Why funding change resets cycle:**
@@ -282,6 +300,7 @@ else:
 1. **New cycle starts when:**
    - First time locking share
    - PnL sign flips (LOSS ↔ PROFIT)
+   - **PnL magnitude reduces** (trading reduced exposure) ⭐ NEW FIX
    - **Funding changes** (new exposure = new cycle) ⭐ NEW FIX
 
 2. **Cycle closes when:**
@@ -1150,6 +1169,56 @@ if self.locked_initial_final_share is not None:
 ```
 
 **Result:** Funding change triggers new cycle, share recalculated correctly.
+
+**Fix:** Implemented in `lock_initial_share_if_needed()` method (line ~198)
+
+---
+
+### Failure Case 7: PnL Magnitude Reduction Doesn't Reset Cycle
+
+**❌ Problem:**
+- Old cycle: Profit=+100, Share=10 (LOCKED)
+- Trading reduces profit: Profit=+1, Share=0
+- System reuses old locked share (10) → Remaining = 10 ❌ (should be 0)
+
+**Root Cause:**
+- No sign flip (both are PROFIT)
+- No funding change
+- No cycle reset triggered
+- Old locked share persists forever
+- Overcharging client
+
+**Example:**
+```
+Funding = 200
+Exchange Balance = 201
+Client PnL = +1
+Share % = 10%
+
+Expected:
+- Exact Share = 1 × 10% = 0.1
+- Final Share = floor(0.1) = 0
+- Remaining = 0
+
+Actual (before fix):
+- Locked Share = 10 (from old cycle)
+- Remaining = 10 ❌ WRONG
+```
+
+**✅ Fix:**
+```python
+# CRITICAL FIX: PnL magnitude reduction should reset cycle
+if self.locked_initial_pnl is not None and client_pnl != 0:
+    locked_pnl_abs = abs(self.locked_initial_pnl)
+    current_pnl_abs = abs(client_pnl)
+    
+    if current_pnl_abs < locked_pnl_abs:
+        # PnL magnitude reduced → reset cycle
+        self.locked_initial_final_share = None
+        # ... reset all locks
+```
+
+**Result:** PnL magnitude reduction triggers cycle reset, share recalculated correctly.
 
 **Fix:** Implemented in `lock_initial_share_if_needed()` method (line ~198)
 
