@@ -852,11 +852,11 @@ def settle_payment(request):
                         transaction_amount = 0
                     
                     Transaction.objects.create(
-    client_exchange=client_exchange,
+                        client_exchange=client_exchange,
                         type='RECORD_PAYMENT',
-                            amount=transaction_amount,  # Positive if client pays you, negative if you pay client
-    date=tx_date,
-    note=note or f"Settlement: ₹{amount} ({payment_type})"
+                        amount=transaction_amount,  # Positive if client pays you, negative if you pay client
+                        date=tx_date,
+                        note=note or f"Settlement: ₹{amount} ({payment_type})"
                     )
                     
                     messages.success(request, f"Settlement of ₹{amount} recorded successfully.")
@@ -1447,6 +1447,8 @@ def pending_summary(request):
             # Add to list (ALWAYS, even if FinalShare = 0)
             # CRITICAL FIX (FAIL CASE 2): Remaining display sign based on PnL direction
             display_remaining = calculate_display_remaining(client_pnl, remaining_amount)
+            # Store absolute value for display (always positive)
+            remaining_display = abs(display_remaining) if display_remaining else 0
             
             # FINANCIAL INTERPRETATION: Client PnL < 0 (LOSS) → Client owes you → DisplayRemaining is POSITIVE
             clients_owe_list.append({
@@ -1456,7 +1458,7 @@ def pending_summary(request):
                 "client_pnl": client_pnl,  # Masked in template
                 "amount_owed": total_loss,  # Amount owed = total loss (masked in template)
                 "my_share_amount": final_share,  # Final share (floor rounded)
-                "remaining_amount": display_remaining,  # DisplayRemaining: POSITIVE for loss (client owes you), NEGATIVE for profit (you owe client)
+                "remaining_amount": remaining_display,  # Absolute value for display (always positive)
                 "share_percentage": share_pct,
                 "show_na": show_na,  # Flag for N.A display
                 })
@@ -1490,6 +1492,8 @@ def pending_summary(request):
             # Add to list (ALWAYS, even if FinalShare = 0)
             # CRITICAL FIX (FAIL CASE 2): Remaining display sign based on PnL direction
             display_remaining = calculate_display_remaining(client_pnl, remaining_amount)
+            # Store absolute value for display (always positive)
+            remaining_display = abs(display_remaining) if display_remaining else 0
             
             # FINANCIAL INTERPRETATION: Client PnL > 0 (PROFIT) → You owe client → DisplayRemaining is NEGATIVE
             you_owe_list.append({
@@ -1499,7 +1503,7 @@ def pending_summary(request):
                 "client_pnl": client_pnl,  # Masked in template
                 "amount_owed": unpaid_profit,  # Amount you owe = profit (masked in template)
                 "my_share_amount": final_share,  # Final share (floor rounded)
-                "remaining_amount": display_remaining,  # DisplayRemaining: NEGATIVE for profit (you owe client), POSITIVE for loss (client owes you)
+                "remaining_amount": remaining_display,  # Absolute value for display (always positive)
                 "share_percentage": share_pct,
                 "show_na": show_na,  # Flag for N.A display
             })
@@ -1524,9 +1528,11 @@ def pending_summary(request):
     
     # Calculate totals (using remaining amounts for settlement tracking)
     total_clients_owe = sum(item.get("amount_owed", 0) for item in clients_owe_list)
-    total_my_share_clients_owe = sum(item.get("remaining_amount", 0) for item in clients_owe_list)  # Use remaining, not total share
+    # Remaining amounts are already absolute values (calculated above)
+    total_my_share_clients_owe = sum(item.get("remaining_amount", 0) for item in clients_owe_list)
     total_you_owe = sum(item.get("amount_owed", 0) for item in you_owe_list)
-    total_my_share_you_owe = sum(item.get("remaining_amount", 0) for item in you_owe_list)  # Use remaining, not total share
+    # Remaining amounts are already absolute values (calculated above)
+    total_my_share_you_owe = sum(item.get("remaining_amount", 0) for item in you_owe_list)
     
     # Get all clients for search dropdown
     all_clients = Client.objects.filter(user=request.user).order_by("name")
@@ -1648,6 +1654,8 @@ def export_pending_csv(request):
             # Add to list (ALWAYS, even if FinalShare = 0)
             # CRITICAL FIX (FAIL CASE 2): Remaining display sign based on PnL direction
             display_remaining = calculate_display_remaining(client_pnl, remaining_amount)
+            # Store absolute value for display (always positive)
+            remaining_display = abs(display_remaining) if display_remaining else 0
             
             clients_owe_list.append({
                 "client": client_exchange.client,
@@ -1656,7 +1664,7 @@ def export_pending_csv(request):
                 "client_pnl": client_pnl,
                 "amount_owed": total_loss,
                 "my_share_amount": final_share,
-                "remaining_amount": display_remaining,  # Signed based on PnL direction
+                "remaining_amount": remaining_display,  # Absolute value for display (always positive)
                 "share_percentage": share_pct,
                 "show_na": show_na,  # Flag for N.A display
                 })
@@ -1686,6 +1694,8 @@ def export_pending_csv(request):
             # Add to list (ALWAYS, even if FinalShare = 0)
             # CRITICAL FIX (FAIL CASE 2): Remaining display sign based on PnL direction
             display_remaining = calculate_display_remaining(client_pnl, remaining_amount)
+            # Store absolute value for display (always positive)
+            remaining_display = abs(display_remaining) if display_remaining else 0
             
             # FINANCIAL INTERPRETATION: Client PnL > 0 (PROFIT) → You owe client → DisplayRemaining is NEGATIVE
             you_owe_list.append({
@@ -1695,7 +1705,7 @@ def export_pending_csv(request):
                 "client_pnl": client_pnl,
                 "amount_owed": unpaid_profit,
                 "my_share_amount": final_share,
-                "remaining_amount": display_remaining,  # DisplayRemaining: NEGATIVE for profit (you owe client), POSITIVE for loss (client owes you)
+                "remaining_amount": remaining_display,  # Absolute value for display (always positive)
                 "share_percentage": share_pct,
                 "show_na": show_na,  # Flag for N.A display
             })
@@ -3521,11 +3531,16 @@ def add_funding(request, account_id):
                 })
             
             # FUNDING RULE: Both funding and exchange_balance increase by the same amount
+            # Manual funding closes old cycle and starts new cycle
             old_funding = account.funding
             old_balance = account.exchange_balance
             
             account.funding += amount
             account.exchange_balance += amount
+            
+            # Close old cycle when manual funding is added
+            account.close_cycle()
+            
             account.save()
             
             # Create transaction record for audit trail
@@ -3535,7 +3550,7 @@ def add_funding(request, account_id):
                 type='FUNDING',
                 amount=amount,
                 exchange_balance_after=account.exchange_balance,
-                notes=notes or f"Funding added: {amount}"
+                notes=notes or f"Manual funding added: {amount}"
             )
             
             from django.contrib import messages
@@ -3810,75 +3825,121 @@ def record_payment(request, account_id):
                     # Use helper method to compute masked capital
                     masked_capital = account.compute_masked_capital(paid_amount)
                     
+                    # Get re-add capital option (LOSS CASE ONLY)
+                    re_add_capital = False
+                    if client_pnl_before < 0:
+                        # LOSS CASE: Check if re-add capital option is enabled
+                        re_add_capital_str = request.POST.get("re_add_capital", "").strip().lower()
+                        re_add_capital = re_add_capital_str in ('true', '1', 'on', 'yes')
+                    else:
+                        # PROFIT CASE: Re-add capital is FORBIDDEN
+                        re_add_capital_str = request.POST.get("re_add_capital", "").strip().lower()
+                        if re_add_capital_str in ('true', '1', 'on', 'yes'):
+                            raise ValidationError(
+                                "Re-add capital option is not allowed for profit cases. "
+                                "Funding must never increase when paying profits."
+                            )
+                    
                     # CRITICAL: Validate that funding/exchange_balance won't go negative
                     if client_pnl_before < 0:
                         # LOSS CASE: Masked capital reduces Funding
-                        # Formula: Funding = Funding − MaskedCapital
+                        # RULE 1: Funding = Funding − MaskedCapital
+                        # ExchangeBalance = ExchangeBalance (unchanged)
                         if account.funding - int(masked_capital) < 0:
                             raise ValidationError(
                                 f"Cannot record payment. Funding would become negative "
                                 f"(Current: {account.funding}, Masked Capital: {int(masked_capital)})."
                             )
                         account.funding -= int(masked_capital)
-                        action_desc = f"Funding reduced: {old_funding} → {account.funding} (Masked Capital: {int(masked_capital)}, SharePayment: {paid_amount}, Locked Initial PnL: {locked_initial_pnl}, Locked Initial Share: {initial_final_share})"
+                        # Exchange balance remains unchanged in loss case
+                        action_desc = f"Funding reduced: {old_funding} → {account.funding} (Masked Capital: {int(masked_capital)}, SharePayment: {paid_amount})"
                     else:
                         # PROFIT CASE: Masked capital reduces Exchange Balance
-                        # Formula: ExchangeBalance = ExchangeBalance − MaskedCapital
+                        # RULE 2: ExchangeBalance = ExchangeBalance − MaskedCapital
+                        # Funding = Funding (NO CHANGE - NEVER INCREASES)
                         if account.exchange_balance - int(masked_capital) < 0:
                             raise ValidationError(
                                 f"Cannot record payment. Exchange balance would become negative "
                                 f"(Current: {account.exchange_balance}, Masked Capital: {int(masked_capital)})."
                             )
                         account.exchange_balance -= int(masked_capital)
-                        action_desc = f"Exchange balance reduced: {old_balance} → {account.exchange_balance} (Masked Capital: {int(masked_capital)}, SharePayment: {paid_amount}, Locked Initial PnL: {locked_initial_pnl}, Locked Initial Share: {initial_final_share})"
+                        # Funding remains unchanged in profit case (CRITICAL RULE)
+                        action_desc = f"Exchange balance reduced: {old_balance} → {account.exchange_balance} (Masked Capital: {int(masked_capital)}, SharePayment: {paid_amount})"
                     
                     # Save account changes
                     account.save()
                     
                     # MASKED SHARE SETTLEMENT SYSTEM: Create Settlement record
-                    Settlement.objects.create(
+                    settlement = Settlement.objects.create(
                         client_exchange=account,
                         amount=paid_amount,
-                        date=payment_date,  # Use provided date or current time
+                        date=payment_date,
                         notes=notes or f"Payment recorded: {paid_amount}. {action_desc}"
                     )
                     
                     # Create transaction record for audit trail
                     # Transaction sign was already decided BEFORE balance update (FAIL CASE 1 FIX)
-                    
                     Transaction.objects.create(
                         client_exchange=account,
-                        date=payment_date,  # Use provided date or current time
+                        date=payment_date,
                         type='RECORD_PAYMENT',
                         amount=transaction_amount,  # Positive if client pays you, negative if you pay client
                         exchange_balance_after=account.exchange_balance,
                         notes=notes or f"Payment recorded: {paid_amount}. {action_desc}"
                     )
                     
+                    # OPTIONAL: Auto Re-Funding (LOSS CASE ONLY)
+                    # This is NOT settlement - it's new capital injection
+                    # Must be recorded as a separate transaction
+                    cycle_closed = False
+                    if re_add_capital and client_pnl_before < 0:
+                        # Re-add capital: Funding = Funding + MaskedCapital
+                        # ExchangeBalance = ExchangeBalance + MaskedCapital
+                        account.funding += int(masked_capital)
+                        account.exchange_balance += int(masked_capital)
+                        account.save()
+                        
+                        # Create separate transaction for auto re-funding
+                        Transaction.objects.create(
+                            client_exchange=account,
+                            date=payment_date,
+                            type='FUNDING',
+                            amount=int(masked_capital),
+                            exchange_balance_after=account.exchange_balance,
+                            notes=f"Auto Re-Funding after settlement (linked to Settlement ID: {settlement.id}). "
+                                  f"Amount: {int(masked_capital)} (Masked Capital)"
+                        )
+                        
+                        # Re-fund closes old cycle and starts new cycle
+                        account.close_cycle()
+                        cycle_closed = True
+                    
+                    # Check if cycle should close (full settlement without re-fund)
+                    if not cycle_closed:
+                        new_settlement_info = account.get_remaining_settlement_amount()
+                        new_remaining = new_settlement_info['remaining']
+                        
+                        if new_remaining == 0:
+                            # Full settlement - close cycle
+                            account.close_cycle()
+                            cycle_closed = True
+                    
                     # Recompute values after payment
                     new_pnl = account.compute_client_pnl()
-                    new_final_share = account.compute_my_share()
                     new_settlement_info = account.get_remaining_settlement_amount()
                     new_remaining = new_settlement_info['remaining']
-                    new_overpaid = new_settlement_info['overpaid']
                     
                     from django.contrib import messages
-                    if new_pnl == 0:
-                        messages.success(
-                            request,
-                            f"Payment of {paid_amount} recorded successfully. Account PnL is now zero (trading flat)."
-                        )
-                    elif new_remaining == 0:
-                        messages.success(
-                            request,
-                            f"Payment of {paid_amount} recorded successfully. Settlement complete (remaining share: 0)."
-                        )
-                    else:
-                        messages.success(
-                            request,
-                            f"Payment of {paid_amount} recorded successfully. "
-                            f"Remaining settlement amount: {new_remaining}"
-                        )
+                    success_msg = f"Payment of {paid_amount} recorded successfully."
+                    
+                    if re_add_capital and client_pnl_before < 0:
+                        success_msg += f" Capital re-added: {int(masked_capital)}. New cycle started."
+                    elif cycle_closed:
+                        success_msg += " Settlement complete. Cycle closed."
+                    elif new_remaining > 0:
+                        success_msg += f" Remaining settlement amount: {new_remaining}"
+                    
+                    messages.success(request, success_msg)
                     
                     # Redirect based on redirect_to parameter
                     if redirect_to == 'pending_summary':

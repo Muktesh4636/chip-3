@@ -44,12 +44,12 @@
     <div class="card">
         <div class="card-title">Total Clients Owe</div>
         <div class="card-value negative">{{ total_clients_owe|floatformat:0 }}</div>
-        <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Your Share: {{ total_my_share_clients_owe|floatformat:0 }}</div>
+        <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Remaining to settle: {{ total_my_share_clients_owe|floatformat:0 }}</div>
         </div>
     <div class="card">
         <div class="card-title">Total You Owe</div>
         <div class="card-value negative">{{ total_you_owe|floatformat:0 }}</div>
-        <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Your Share: {{ total_my_share_you_owe|floatformat:0 }}</div>
+        <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Remaining to settle: {{ total_my_share_you_owe|floatformat:0 }}</div>
     </div>
         </div>
 
@@ -106,7 +106,7 @@
                     <td>
                         {% if item.show_na %}
                             <span style="color: var(--muted);">N.A</span>
-                            {% else %}
+                        {% else %}
                             <strong style="color: var(--accent);">{{ item.remaining_amount|floatformat:0 }}</strong>
                         {% endif %}
                     </td>
@@ -114,7 +114,7 @@
                     <td>
                         {% if item.show_na %}
                             <span style="color: var(--muted); font-size: 12px;">N.A</span>
-                        {% elif item.remaining_amount > 0 %}
+                        {% elif item.remaining_amount != 0 %}
                             <a href="{% url 'record_payment' item.account.pk %}?redirect_to=pending_summary" class="btn btn-sm btn-primary" style="margin-right: 4px;">Record Payment</a>
                         {% else %}
                             <span style="color: var(--muted); font-size: 12px;">Settled</span>

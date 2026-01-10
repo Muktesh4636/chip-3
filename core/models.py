@@ -424,6 +424,25 @@ class ClientExchangeAccount(TimeStampedModel):
                 self.save(update_fields=['locked_initial_final_share', 'locked_share_percentage', 'locked_initial_pnl', 'cycle_start_date', 'locked_initial_funding'])
             # Otherwise, keep the locked share even if PnL is 0 (settlements may have brought it to zero)
     
+    def close_cycle(self):
+        """
+        Close the current settlement cycle by resetting all locks.
+        
+        This should be called when:
+        - Full settlement is complete (Remaining = 0)
+        - Re-funding occurs (loss case with re-add capital)
+        - Manual funding is added
+        """
+        self.locked_initial_final_share = None
+        self.locked_share_percentage = None
+        self.locked_initial_pnl = None
+        self.cycle_start_date = None
+        self.locked_initial_funding = None
+        self.save(update_fields=[
+            'locked_initial_final_share', 'locked_share_percentage',
+            'locked_initial_pnl', 'cycle_start_date', 'locked_initial_funding'
+        ])
+    
     def get_remaining_settlement_amount(self):
         """
         CRITICAL FIX: Calculate remaining using LOCKED InitialFinalShare.
