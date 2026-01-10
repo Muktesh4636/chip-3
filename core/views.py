@@ -729,9 +729,6 @@ def settle_payment(request):
 
 
 @login_required
-
-
-@login_required
 def client_create(request):
     """Create a new client
     
@@ -750,7 +747,6 @@ def client_create(request):
         name = request.POST.get("name", "").strip()
         code = request.POST.get("code", "").strip()
         referred_by = request.POST.get("referred_by", "").strip()
-        is_company_client = request.POST.get("is_company_client") == "on"
         
         # CRITICAL: Convert empty string to None (required for UNIQUE constraint)
         # Empty strings ('') conflict with UNIQUE, but NULL values don't
@@ -761,7 +757,6 @@ def client_create(request):
             return render(request, "core/clients/create.html", {
                 'code': code or '',
                 'referred_by': referred_by,
-                'is_company_client': is_company_client,
             })
         
         # Check for duplicate code BEFORE saving (user-friendly error)
@@ -777,7 +772,6 @@ def client_create(request):
                     'name': name,
                     'code': code,
                     'referred_by': referred_by,
-                    'is_company_client': is_company_client,
                 })
         
         try:
@@ -787,7 +781,6 @@ def client_create(request):
                 name=name,
                 code=code,  # Already None if empty
                 referred_by=referred_by if referred_by else None,
-                is_company_client=is_company_client,
             )
             # This will call clean() and save()
             client.save()
@@ -802,7 +795,6 @@ def client_create(request):
                 'name': name,
                 'code': code,
                 'referred_by': referred_by,
-                'is_company_client': is_company_client,
             })
         except IntegrityError as e:
             # Handle database integrity errors (shouldn't happen with pre-check, but safety net)
@@ -817,7 +809,6 @@ def client_create(request):
                 'name': name,
                 'code': code,
                 'referred_by': referred_by,
-                'is_company_client': is_company_client,
             })
         except Exception as e:
             messages.error(request, f"Error creating client: {str(e)}")
@@ -825,18 +816,12 @@ def client_create(request):
                 'name': name,
                 'code': code,
                 'referred_by': referred_by,
-                'is_company_client': is_company_client,
             })
     
     return render(request, "core/clients/create.html")
 
 
 @login_required
-
-
-@login_required
-
-
 def my_client_create(request):
     """Create a my (personal) client
     
@@ -933,8 +918,6 @@ def my_client_create(request):
 
 
 @login_required
-
-
 def client_delete(request, pk):
 
 
@@ -1110,8 +1093,6 @@ def transaction_list(request):
             Client.objects.get(pk=client_id, user=request.user)
         except Client.DoesNotExist:
             client_id = None
-
-
     
     return render(request, "core/transactions/list.html", {
         "transactions": transactions,
@@ -1156,11 +1137,7 @@ def calculate_net_tallies_from_transactions(client_exchange, as_of_date=None):
 
 
 @login_required
-
-
 def pending_summary(request):
-    
-    
     """
     Pending Payments Summary.
     
@@ -1688,61 +1665,16 @@ def report_overview(request):
     month_str = request.GET.get("month", today.strftime("%Y-%m"))
     try:
         year, month = map(int, month_str.split("-"))
-
         selected_month_start = date(year, month, 1)
         if month == 12:
-
-
-            pass
+            selected_month_end = date(year, 12, 31)
         else:
-
             selected_month_end = date(year, month + 1, 1) - timedelta(days=1)
-
-
     except (ValueError, IndexError):
-
         selected_month_start = date(today.year, today.month, 1)
-
-
         if today.month == 12:
-
-
-
-            pass
+            selected_month_end = date(today.year, 12, 31)
         else:
-
-            selected_month_end = date(today.year, today.month + 1, 1) - timedelta(days=1)
-
-
-
-    
-    # Month selection parameter
-    month_str = request.GET.get("month", today.strftime("%Y-%m"))
-    try:
-        year, month = map(int, month_str.split("-"))
-
-        selected_month_start = date(year, month, 1)
-        if month == 12:
-
-
-            pass
-        else:
-
-            selected_month_end = date(year, month + 1, 1) - timedelta(days=1)
-
-
-    except (ValueError, IndexError):
-
-        selected_month_start = date(today.year, today.month, 1)
-
-
-        if today.month == 12:
-
-
-
-            pass
-        else:
-
             selected_month_end = date(today.year, today.month + 1, 1) - timedelta(days=1)
 
 
