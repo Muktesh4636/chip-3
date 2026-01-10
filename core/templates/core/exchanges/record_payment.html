@@ -52,6 +52,14 @@
     <form method="post">
         {% csrf_token %}
         <div class="form-row">
+            <label class="field-label">Payment Date *</label>
+            <input type="date" name="payment_date" class="field-input" value="{{ today|date:'Y-m-d' }}" required>
+            <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">
+                Date when the payment was made or should be recorded
+            </div>
+        </div>
+        
+        <div class="form-row">
             <label class="field-label">Share Payment (in share units) *</label>
             {% if final_share == 0 %}
                 <input type="number" name="amount" class="field-input" disabled>

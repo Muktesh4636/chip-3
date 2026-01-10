@@ -634,7 +634,7 @@ class Settlement(TimeStampedModel):
         validators=[MinValueValidator(1)],
         help_text="Settlement amount (integer, > 0)"
     )
-    date = models.DateTimeField(auto_now_add=True)
+    date = models.DateTimeField(help_text="Date when payment was made")
     notes = models.TextField(blank=True, null=True, help_text="Optional notes about this settlement")
     
     class Meta:
