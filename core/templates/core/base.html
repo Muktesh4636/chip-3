@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>{% block title %}Transaction Hub{% endblock %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    {% block extra_head %}{% endblock %}
     <style>
         :root {
             --bg: #f1f5f9;
@@ -475,6 +476,75 @@
     <script>
         function toggleSidebar() {
             document.body.classList.toggle('sidebar-collapsed');
+        }
+
+        // Currency formatting functions - Indian numbering system
+        // Indian numbering: last 3 digits, then groups of 2 digits
+        // Examples: 100 -> "100", 1000 -> "1,000", 10000 -> "10,000", 100000 -> "1,00,000"
+        function formatIndianNumber(num) {
+            if (!num && num !== 0) return '';
+            const numStr = num.toString().replace(/,/g, '');
+            const parts = numStr.split('.');
+            
+            let integerPart = parts[0];
+            const len = integerPart.length;
+            
+            // Only format if more than 3 digits
+            if (len > 3) {
+                // Take last 3 digits
+                const lastThree = integerPart.slice(-3);
+                // Take remaining digits
+                const remaining = integerPart.slice(0, -3);
+                
+                // Group remaining digits in pairs from right to left
+                let formatted = '';
+                for (let i = remaining.length; i > 0; i -= 2) {
+                    const start = Math.max(0, i - 2);
+                    const pair = remaining.slice(start, i);
+                    formatted = pair + (formatted ? ',' + formatted : '');
+                }
+                
+                integerPart = formatted + ',' + lastThree;
+            }
+            parts[0] = integerPart;
+            return parts.join('.');
+        }
+
+        function formatCurrencyINR(num) {
+            if (!num && num !== 0) return '';
+            return '₹' + formatIndianNumber(num);
+        }
+
+        // Initialize amount input with two-field approach (display + hidden)
+        function initAmountInput(displayId, hiddenId) {
+            const displayInput = document.getElementById(displayId);
+            const hiddenInput = document.getElementById(hiddenId);
+            
+            if (!displayInput || !hiddenInput) return;
+            
+            // Format on input
+            displayInput.addEventListener('input', function(e) {
+                let value = e.target.value.replace(/,/g, '').replace(/\D/g, '');
+                
+                if (value) {
+                    // Format with commas for display
+                    displayInput.value = formatIndianNumber(value);
+                    // Store clean value in hidden input
+                    hiddenInput.value = value;
+                } else {
+                    displayInput.value = '';
+                    hiddenInput.value = '';
+                }
+            });
+            
+            // Format on blur (when user leaves field)
+            displayInput.addEventListener('blur', function(e) {
+                let value = e.target.value.replace(/,/g, '').replace(/\D/g, '');
+                if (value) {
+                    displayInput.value = formatIndianNumber(value);
+                    hiddenInput.value = value;
+                }
+            });
         }
 
     </script>

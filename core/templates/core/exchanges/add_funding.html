@@ -1,4 +1,5 @@
 {% extends "core/base.html" %}
+{% load math_filters %}
 
 {% block title %}Add Funding · Transaction Hub{% endblock %}
 {% block page_title %}Add Funding{% endblock %}
@@ -17,8 +18,8 @@
     <div style="background: #ecfeff; padding: 16px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #06b6d4;">
         <div style="font-size: 14px; color: #0e7490; margin-bottom: 8px;"><strong>Current Account Status</strong></div>
         <div style="font-size: 13px; color: #0e7490;">
-            Funding: {{ account.funding|floatformat:0 }}<br>
-            Exchange Balance: {{ account.exchange_balance|floatformat:0 }}
+            Funding: {{ account.funding|currency_inr }}<br>
+            Exchange Balance: {{ account.exchange_balance|currency_inr }}
         </div>
     </div>
     
@@ -28,12 +29,26 @@
         </div>
     </div>
     
-    <form method="post">
+    <form method="post" id="funding-form">
         {% csrf_token %}
         <div class="form-row">
             <label class="field-label">Amount *</label>
-            <input type="number" name="amount" class="field-input" min="1" required>
+            <input 
+                type="text" 
+                id="funding_display" 
+                class="field-input" 
+                placeholder="Enter amount"
+                autocomplete="off"
+                required
+            >
+            <input 
+                type="hidden" 
+                name="amount" 
+                id="funding_actual"
+                required
+            >
             <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">
+                <span style="color: #06b6d4;">ℹ️</span> Amount will be automatically formatted with commas. You can type numbers normally.<br>
                 Amount in smallest currency unit (e.g., paise for rupees). Both funding and exchange balance will increase by this amount.
             </div>
         </div>
@@ -49,6 +64,31 @@
         </div>
     </form>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        initAmountInput('funding_display', 'funding_actual');
+        
+        // Form validation: ensure hidden input has value before submit
+        document.getElementById('funding-form').addEventListener('submit', function(e) {
+            const hiddenInput = document.getElementById('funding_actual');
+            const displayInput = document.getElementById('funding_display');
+            
+            // Get clean value from display input
+            let raw = displayInput.value.replace(/,/g, "").replace(/\D/g, "");
+            
+            if (!raw || parseInt(raw) <= 0) {
+                e.preventDefault();
+                alert('Please enter a valid amount greater than zero.');
+                displayInput.focus();
+                return false;
+            }
+            
+            // Update hidden input with clean value
+            hiddenInput.value = raw;
+        });
+    });
+</script>
 {% endblock %}
 
 

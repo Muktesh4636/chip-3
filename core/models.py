@@ -3,9 +3,43 @@ Database models for Profit-Loss-Share-Settlement System
 Following PIN-TO-PIN master document specifications.
 """
 from django.db import models
-from django.contrib.auth.models import User
+from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
+
+
+class CustomUser(AbstractUser):
+    """
+    Custom User model that allows any characters in username.
+    Username length: 4-30 characters (no character restrictions).
+    """
+    # Override username field to remove character restrictions
+    username = models.CharField(
+        max_length=30,
+        unique=True,
+        help_text='Required. 4-30 characters. You can use any characters.',
+        error_messages={
+            'unique': "A user with that username already exists.",
+        },
+        validators=[],  # Remove default validators that restrict characters
+    )
+    
+    class Meta:
+        db_table = 'auth_user'
+        verbose_name = 'user'
+        verbose_name_plural = 'users'
+
+    def __str__(self):
+        return self.username
+    
+    def clean(self):
+        """Custom validation for username length."""
+        from django.core.exceptions import ValidationError
+        # Don't call super().clean() as it will apply AbstractUser's validators
+        if len(self.username) < 4:
+            raise ValidationError({'username': 'Username must be at least 4 characters long.'})
+        if len(self.username) > 30:
+            raise ValidationError({'username': 'Username must be at most 30 characters long.'})
 
 
 class TimeStampedModel(models.Model):
@@ -32,7 +66,7 @@ class Client(TimeStampedModel):
     code = models.CharField(max_length=50, blank=True, null=True, unique=True)
     referred_by = models.CharField(max_length=200, blank=True, null=True)
     is_company_client = models.BooleanField(default=False)
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='clients')
+    user = models.ForeignKey('CustomUser', on_delete=models.SET_NULL, null=True, blank=True, related_name='clients')
     
     class Meta:
         ordering = ['name']
@@ -426,22 +460,21 @@ class ClientExchangeAccount(TimeStampedModel):
     
     def close_cycle(self):
         """
-        Close the current settlement cycle by resetting all locks.
+        Close the current PnL cycle by resetting all cycle-related fields.
         
-        This should be called when:
-        - Full settlement is complete (Remaining = 0)
-        - Re-funding occurs (loss case with re-add capital)
-        - Manual funding is added
+        This method is called when:
+        - Manual funding is added (new exposure = new cycle)
+        - Auto re-funding occurs after settlement (new cycle starts)
+        - Full settlement is completed (cycle ends)
+        
+        Resets all locked cycle values to allow a new cycle to start.
         """
         self.locked_initial_final_share = None
         self.locked_share_percentage = None
         self.locked_initial_pnl = None
         self.cycle_start_date = None
         self.locked_initial_funding = None
-        self.save(update_fields=[
-            'locked_initial_final_share', 'locked_share_percentage',
-            'locked_initial_pnl', 'cycle_start_date', 'locked_initial_funding'
-        ])
+        self.save(update_fields=['locked_initial_final_share', 'locked_share_percentage', 'locked_initial_pnl', 'cycle_start_date', 'locked_initial_funding'])
     
     def get_remaining_settlement_amount(self):
         """
@@ -669,12 +702,24 @@ class Transaction(TimeStampedModel):
     
     Stores transaction history for audit purposes.
     NEVER used to recompute balances.
+    
+    Each transaction represents exactly one financial intent:
+    - FUNDING_MANUAL: User adds capital
+    - FUNDING_AUTO: Optional re-funding after settlement
+    - TRADE: Exchange trading activity
+    - SETTLEMENT_SHARE: Share payment (profit/loss)
+    
+    Balance mutations are stored as before/after values for audit trail.
     """
     TRANSACTION_TYPES = [
-        ('FUNDING', 'Funding'),
+        ('FUNDING_MANUAL', 'Funding'),
+        ('FUNDING_AUTO', 'Auto Re-Funding'),
         ('TRADE', 'Trade'),
+        ('SETTLEMENT_SHARE', 'Settlement Share Payment'),
         ('FEE', 'Fee'),
         ('ADJUSTMENT', 'Adjustment'),
+        # Legacy types for backward compatibility
+        ('FUNDING', 'Funding (Legacy)'),
         ('RECORD_PAYMENT', 'Record Payment'),
     ]
     
@@ -685,14 +730,82 @@ class Transaction(TimeStampedModel):
     )
     date = models.DateTimeField()
     type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
-    amount = models.BigIntegerField(help_text="Amount in smallest currency unit")
+    amount = models.BigIntegerField(help_text="Amount in smallest currency unit (signed, for reporting only)")
+    
+    # Balance tracking for audit trail
+    funding_before = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text="Funding before this transaction (for audit)"
+    )
+    funding_after = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text="Funding after this transaction (for audit)"
+    )
+    exchange_balance_before = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text="Exchange balance before this transaction (for audit)"
+    )
     exchange_balance_after = models.BigIntegerField(
+        null=True,
+        blank=True,
         help_text="Exchange balance after this transaction (for audit)"
     )
+    
+    # Sequence number for ordering (auto-increment per account)
+    sequence_no = models.IntegerField(
+        default=0,
+        help_text="Sequence number for ordering transactions (auto-increment per account)"
+    )
+    
     notes = models.TextField(blank=True, null=True)
     
     class Meta:
-        ordering = ['-date', '-id']
+        ordering = ['created_at', 'sequence_no']
+        indexes = [
+            models.Index(fields=['client_exchange', 'created_at', 'sequence_no']),
+        ]
     
     def __str__(self):
         return f"{self.type} - {self.client_exchange} - {self.date.strftime('%Y-%m-%d')}"
+    
+    def save(self, *args, **kwargs):
+        """
+        Auto-increment sequence_no per account if not provided.
+        """
+        if not self.sequence_no:
+            # Get the max sequence_no for this account
+            max_seq = Transaction.objects.filter(
+                client_exchange=self.client_exchange
+            ).aggregate(
+                max_seq=models.Max('sequence_no')
+            )['max_seq'] or 0
+            self.sequence_no = max_seq + 1
+        super().save(*args, **kwargs)
+
+
+class EmailOTP(TimeStampedModel):
+    """
+    Model to store OTP codes for email verification during signup.
+    """
+    email = models.EmailField(unique=True)
+    username = models.CharField(max_length=150)
+    otp_code = models.CharField(max_length=6)
+    is_verified = models.BooleanField(default=False)
+    expires_at = models.DateTimeField()
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['email', 'otp_code']),
+        ]
+    
+    def __str__(self):
+        return f"OTP for {self.email} - {'Verified' if self.is_verified else 'Pending'}"
+    
+    def is_expired(self):
+        """Check if OTP has expired."""
+        from django.utils import timezone
+        return timezone.now() > self.expires_at

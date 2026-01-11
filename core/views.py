@@ -3,10 +3,13 @@ from decimal import Decimal
 import json
 import time
 
-from django.contrib.auth import logout, login, authenticate
+from django.contrib.auth import logout, login, authenticate, get_user_model
 from django.contrib.auth.decorators import login_required
+
+User = get_user_model()
 from django.db.models import Q, Sum, Count, F
 from django.db.models.functions import Abs
+from django.core.exceptions import FieldError
 from django.db import transaction as db_transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -15,7 +18,11 @@ from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 from django.core.cache import cache
 from django.conf import settings
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
 import logging
+import random
+import string
 
 logger = logging.getLogger('core.security')
 
@@ -26,7 +33,9 @@ from .models import (
     Transaction,
     ClientExchangeReportConfig,
     Settlement,
+    EmailOTP,
     )
+from .forms import SignupForm, OTPVerificationForm
 
 # TODO: core.utils.money module removed - add back if needed
 # Placeholder functions
@@ -416,6 +425,242 @@ def logout_view(request):
     return redirect("login")
 
 
+def generate_otp():
+    """Generate a 6-digit OTP code."""
+    return ''.join(random.choices(string.digits, k=6))
+
+
+def send_otp_email(email, username, otp_code):
+    """Send OTP code to user's email."""
+    subject = 'Verify Your Email - Transaction Hub'
+    message = f"""
+Hello {username},
+
+Thank you for signing up for Transaction Hub!
+
+Your email verification code is: {otp_code}
+
+This code will expire in 10 minutes.
+
+If you didn't request this code, please ignore this email.
+
+Best regards,
+Transaction Hub Team
+"""
+    try:
+        send_mail(
+            subject,
+            message,
+            settings.DEFAULT_FROM_EMAIL,
+            [email],
+            fail_silently=False,
+        )
+        return True
+    except Exception as e:
+        logger.error(f'Failed to send OTP email to {email}: {str(e)}')
+        return False
+
+
+def signup_view(request):
+    """
+    Signup view - collects username and email, sends OTP for verification.
+    """
+    if request.user.is_authenticated:
+        return redirect("dashboard")
+    
+    if request.method == "POST":
+        form = SignupForm(request.POST)
+        if form.is_valid():
+            username = form.cleaned_data['username']
+            email = form.cleaned_data['email']
+            password = form.cleaned_data['password']
+            
+            # Generate OTP
+            otp_code = generate_otp()
+            expires_at = timezone.now() + timedelta(minutes=10)
+            
+            # Delete any existing OTP for this email
+            EmailOTP.objects.filter(email=email).delete()
+            
+            # Create new OTP record
+            email_otp = EmailOTP.objects.create(
+                email=email,
+                username=username,
+                otp_code=otp_code,
+                expires_at=expires_at
+            )
+            
+            # Send OTP email
+            if send_otp_email(email, username, otp_code):
+                # Store email, username, and password in session for verification step
+                request.session['signup_email'] = email
+                request.session['signup_username'] = username
+                request.session['signup_password'] = password
+                return redirect('verify_otp')
+            else:
+                # If email sending fails, delete the OTP record
+                email_otp.delete()
+                return render(request, "core/auth/signup.html", {
+                    "form": form,
+                    "error": "Failed to send verification email. Please try again."
+                })
+    else:
+        form = SignupForm()
+    
+    return render(request, "core/auth/signup.html", {"form": form})
+
+
+def verify_otp_view(request):
+    """
+    OTP verification view - verifies OTP and creates user account.
+    """
+    if request.user.is_authenticated:
+        return redirect("dashboard")
+    
+    # Check if user came from signup
+    email = request.session.get('signup_email')
+    username = request.session.get('signup_username')
+    password = request.session.get('signup_password')
+    
+    if not email or not username or not password:
+        return redirect('signup')
+    
+    if request.method == "POST":
+        form = OTPVerificationForm(request.POST, email=email)
+        if form.is_valid():
+            otp_code = form.cleaned_data['otp_code']
+            
+            try:
+                email_otp = EmailOTP.objects.get(email=email, otp_code=otp_code, is_verified=False)
+                
+                # Verify username matches
+                if email_otp.username != username:
+                    return render(request, "core/auth/verify_otp.html", {
+                        "form": form,
+                        "email": email,
+                        "error": "Invalid verification code. Please try again."
+                    })
+                
+                # Check if OTP is expired
+                if email_otp.is_expired():
+                    return render(request, "core/auth/verify_otp.html", {
+                        "form": form,
+                        "email": email,
+                        "error": "OTP code has expired. Please request a new one."
+                    })
+                
+                # Verify OTP
+                email_otp.is_verified = True
+                email_otp.save()
+                
+                # Create user account
+                try:
+                    user = User.objects.create_user(
+                        username=username,
+                        email=email,
+                        password=password
+                    )
+                    user.is_active = True
+                    user.save()
+                    
+                    # Send welcome email
+                    try:
+                        send_mail(
+                            'Welcome to Transaction Hub',
+                            f"""
+Hello {username},
+
+Your account has been successfully created!
+
+You can now login with your username and password at:
+{request.build_absolute_uri(reverse('login'))}
+
+Best regards,
+Transaction Hub Team
+""",
+                            settings.DEFAULT_FROM_EMAIL,
+                            [email],
+                            fail_silently=False,
+                        )
+                    except Exception as e:
+                        logger.warning(f'Failed to send welcome email to {email}: {str(e)}')
+                    
+                    # Clear session data
+                    del request.session['signup_email']
+                    del request.session['signup_username']
+                    del request.session['signup_password']
+                    
+                    # Log the user in
+                    login(request, user)
+                    
+                    logger.info(f'New user account created: {username} ({email})')
+                    
+                    return redirect("dashboard")
+                except Exception as e:
+                    logger.error(f'Failed to create user account: {str(e)}')
+                    return render(request, "core/auth/verify_otp.html", {
+                        "form": form,
+                        "email": email,
+                        "error": "Failed to create account. Please try again."
+                    })
+                
+            except EmailOTP.DoesNotExist:
+                return render(request, "core/auth/verify_otp.html", {
+                    "form": form,
+                    "email": email,
+                    "error": "Invalid OTP code. Please check and try again."
+                })
+    else:
+        form = OTPVerificationForm(email=email)
+    
+    return render(request, "core/auth/verify_otp.html", {
+        "form": form,
+        "email": email
+    })
+
+
+@require_http_methods(["POST"])
+def resend_otp_view(request):
+    """
+    Resend OTP code to user's email.
+    """
+    if request.user.is_authenticated:
+        return redirect("dashboard")
+    
+    email = request.session.get('signup_email')
+    username = request.session.get('signup_username')
+    password = request.session.get('signup_password')
+    
+    if not email or not username or not password:
+        return redirect('signup')
+    
+    # Generate new OTP
+    otp_code = generate_otp()
+    expires_at = timezone.now() + timedelta(minutes=10)
+    
+    # Delete old OTP and create new one
+    EmailOTP.objects.filter(email=email).delete()
+    email_otp = EmailOTP.objects.create(
+        email=email,
+        username=username,
+        otp_code=otp_code,
+        expires_at=expires_at
+    )
+    
+    # Send new OTP email
+    if send_otp_email(email, username, otp_code):
+        from django.contrib import messages
+        messages.success(request, 'A new verification code has been sent to your email.')
+        return redirect('verify_otp')
+    else:
+        email_otp.delete()
+        return render(request, "core/auth/verify_otp.html", {
+            "form": OTPVerificationForm(email=email),
+            "email": email,
+            "error": "Failed to send verification email. Please try again."
+        })
+
+
 @login_required
 def dashboard(request):
 
@@ -451,9 +696,18 @@ def dashboard(request):
             Q(client_exchange__exchange__name__icontains=search_query)
         )
 
-    # CORRECTNESS LOGIC: Turnover = Σ(|RECORD_PAYMENT.amount|) - sum of absolute values
-    turnover_qs = transactions_qs.filter(type='RECORD_PAYMENT')
-    total_turnover = turnover_qs.aggregate(total=Sum(Abs(F("amount"))))["total"] or 0
+    # CORRECTNESS LOGIC: Turnover = Σ(|ExchangeBalanceAfter − ExchangeBalanceBefore|) for TRADE transactions only
+    # Turnover measures trading activity, NOT funding or settlements
+    trade_qs = transactions_qs.filter(type='TRADE').exclude(
+        exchange_balance_before__isnull=True
+    ).exclude(
+        exchange_balance_after__isnull=True
+    )
+    # Calculate turnover as sum of absolute exchange balance movements from trades
+    total_turnover = sum(
+        abs(tx.exchange_balance_after - tx.exchange_balance_before)
+        for tx in trade_qs
+    ) or 0
     your_profit = 0  # Computed from accounts, not transactions
     # Company profit removed - no longer applicable
     company_profit = Decimal(0)
@@ -640,7 +894,7 @@ def client_list(request):
     # Filter by exchange
     if exchange_id:
         clients = clients.filter(
-            client_exchanges__exchange_id=exchange_id
+            exchange_accounts__exchange_id=exchange_id
         ).distinct()
     
     # Get all exchanges for dropdown
@@ -679,7 +933,7 @@ def my_clients_list(request):
     # Filter by exchange
     if exchange_id:
         clients = clients.filter(
-            client_exchanges__exchange_id=exchange_id
+            exchange_accounts__exchange_id=exchange_id
         ).distinct()
     
     # Get all exchanges for dropdown
@@ -851,12 +1105,21 @@ def settle_payment(request):
                         # PnL = 0 (should not happen, but handle gracefully)
                         transaction_amount = 0
                     
+                    # Legacy settle_payment - doesn't update balances, just records transaction
+                    # Set before = after since balances don't change
+                    funding_before = client_exchange.funding
+                    exchange_before = client_exchange.exchange_balance
+                    
                     Transaction.objects.create(
-                        client_exchange=client_exchange,
-                        type='RECORD_PAYMENT',
-                        amount=transaction_amount,  # Positive if client pays you, negative if you pay client
-                        date=tx_date,
-                        note=note or f"Settlement: ₹{amount} ({payment_type})"
+    client_exchange=client_exchange,
+                        type='SETTLEMENT_SHARE',  # Use new type
+                            amount=transaction_amount,  # Positive if client pays you, negative if you pay client
+                        date=timezone.make_aware(datetime.strptime(tx_date, "%Y-%m-%d")) if isinstance(tx_date, str) else tx_date,
+                        funding_before=funding_before,
+                        funding_after=client_exchange.funding,
+                        exchange_balance_before=exchange_before,
+                        exchange_balance_after=client_exchange.exchange_balance,
+                        notes=note or f"Settlement: ₹{amount} ({payment_type})"
                     )
                     
                     messages.success(request, f"Settlement of ₹{amount} recorded successfully.")
@@ -1184,6 +1447,7 @@ def transaction_list(request):
     """Transaction list with filtering options."""
     client_id = request.GET.get("client")
     exchange_id = request.GET.get("exchange")
+    client_exchange_id = request.GET.get("client_exchange")  # Filter by specific client-exchange account
     start_date_str = request.GET.get("start_date")
     end_date_str = request.GET.get("end_date")
     tx_type = request.GET.get("type")
@@ -1198,10 +1462,28 @@ def transaction_list(request):
     
     # All clients are now "my clients" - no filtering needed
     
-    if client_id:
+    # Filter by specific client-exchange account (highest priority)
+    selected_client_exchange_obj = None
+    if client_exchange_id:
+        try:
+            # Validate that the client_exchange belongs to the current user
+            selected_client_exchange_obj = ClientExchangeAccount.objects.select_related('client', 'exchange').get(
+                pk=client_exchange_id,
+                client__user=request.user
+            )
+            transactions = transactions.filter(client_exchange_id=client_exchange_id)
+            # Pre-select client and exchange in dropdowns
+            client_id = str(selected_client_exchange_obj.client_id)
+            exchange_id = str(selected_client_exchange_obj.exchange_id)
+        except (ClientExchangeAccount.DoesNotExist, ValueError):
+            # Invalid client_exchange_id - ignore it
+            client_exchange_id = None
+            selected_client_exchange_obj = None
+    
+    if client_id and not client_exchange_id:
         transactions = transactions.filter(client_exchange__client_id=client_id)
 
-    if exchange_id:
+    if exchange_id and not client_exchange_id:
         transactions = transactions.filter(client_exchange__exchange_id=exchange_id)
 
     if start_date_str:
@@ -1220,7 +1502,11 @@ def transaction_list(request):
 
     if tx_type:
         # Filter transactions by type
-        transactions = transactions.filter(type=tx_type)
+        # Map FUNDING_MANUAL to also include legacy FUNDING transactions
+        if tx_type == 'FUNDING_MANUAL':
+            transactions = transactions.filter(type__in=['FUNDING_MANUAL', 'FUNDING'])
+        else:
+            transactions = transactions.filter(type=tx_type)
 
 
     if search_query:
@@ -1232,7 +1518,15 @@ def transaction_list(request):
             Q(notes__icontains=search_query)
         )
     
-    transactions = transactions.order_by("-date", "-created_at")[:200]
+    # Order by created_at ASC, sequence_no ASC (as per specification)
+    # Handle case where sequence_no field might not be recognized (Django cache issue)
+    try:
+        # Check if field exists in model meta
+        Transaction._meta.get_field('sequence_no')
+        transactions = transactions.order_by("created_at", "sequence_no")[:200]
+    except (FieldError, AttributeError):
+        # Fallback if field not found - use id instead
+        transactions = transactions.order_by("created_at", "id")[:200]
     
     # Filter clients based on client_type for the dropdown
     # All clients are now my clients - no filter needed
@@ -1251,6 +1545,8 @@ def transaction_list(request):
         "all_exchanges": Exchange.objects.all().order_by("name"),
         "selected_client": int(client_id) if client_id else None,
         "selected_exchange": int(exchange_id) if exchange_id else None,
+        "selected_client_exchange": int(client_exchange_id) if client_exchange_id else None,
+        "selected_client_exchange_obj": selected_client_exchange_obj,  # For displaying name
         "start_date": start_date_str,
         "end_date": end_date_str,
         "selected_type": tx_type,
@@ -1735,52 +2031,59 @@ def export_pending_csv(request):
     
     writer = csv.writer(response)
     
-    # Write header row
+    # Get today's date for first row
+    today_date = date.today().strftime('%Y-%m-%d')
+    
+    # Write header row - Date column first, then matching table column order: Client, Code, Exchange, Funding, Exchange Balance, Client PnL, Remaining, Share %
     headers = [
-        'Client Name',
-        'Client Code',
-        'Exchange Name',
-        'Exchange Code',
+        'Date',
+        'Client',
+        'Code',
+        'Exchange',
         'Funding',
         'Exchange Balance',
         'Client PnL',
-        'Final Share',
         'Remaining',
         'Share %'
     ]
     writer.writerow([h.upper() for h in headers])
     
+    # Track if this is the first data row
+    is_first_row = True
+    
     # Write Clients Owe You section (if requested)
     if section in ["all", "clients-owe"]:
         for item in clients_owe_list:
-            writer.writerow([
+            row_data = [
+                today_date if is_first_row else '',  # Date only in first row
                 item["client"].name or '',
                 item["client"].code or '',
                 item["exchange"].name or '',
-                item["exchange"].code or '',
                 int(item["account"].funding),
                 int(item["account"].exchange_balance),
                 'N.A' if item.get("show_na", False) else int(item["client_pnl"]),
-                'N.A' if item.get("show_na", False) else int(item["my_share_amount"]),
                 'N.A' if item.get("show_na", False) else int(item.get("remaining_amount", 0)),
                 item.get("share_percentage", item["account"].my_percentage)
-            ])
+            ]
+            writer.writerow(row_data)
+            is_first_row = False  # After first row, date column will be empty
     
     # Write You Owe Clients section (if requested)
     if section in ["all", "you-owe"]:
         for item in you_owe_list:
-                writer.writerow([
+            row_data = [
+                today_date if is_first_row else '',  # Date only in first row
                 item["client"].name or '',
                 item["client"].code or '',
                 item["exchange"].name or '',
-                item["exchange"].code or '',
                 int(item["account"].funding),
                 int(item["account"].exchange_balance),
                 'N.A' if item.get("show_na", False) else int(item["client_pnl"]),
-                'N.A' if item.get("show_na", False) else int(item["my_share_amount"]),
                 'N.A' if item.get("show_na", False) else int(item.get("remaining_amount", 0)),
                 item.get("share_percentage", item["account"].my_percentage)
-            ])
+            ]
+            writer.writerow(row_data)
+            is_first_row = False  # After first row, date column will be empty
     
     return response
 
@@ -1803,6 +2106,7 @@ def report_overview(request):
 
         pass
     client_id = request.GET.get("client")  # Specific client ID
+    exchange_id = request.GET.get("exchange")  # Specific exchange ID
     
     # Month selection parameter
     month_str = request.GET.get("month", today.strftime("%Y-%m"))
@@ -1852,6 +2156,10 @@ def report_overview(request):
     # Add specific client filter if specified
     if client_id:
         user_filter["client_exchange__client_id"] = client_id
+    
+    # Add specific exchange filter if specified
+    if exchange_id:
+        user_filter["client_exchange__exchange_id"] = exchange_id
 
     # Initialize base queryset with user filter
     base_qs = Transaction.objects.filter(**user_filter)
@@ -1885,7 +2193,8 @@ def report_overview(request):
     # 1. RECORD_PAYMENT and FUNDING transactions (always include)
     # 2. PROFIT/LOSS transactions only if they're for settled client_exchanges and before/on settlement date
     from django.db.models import Q, F
-    settled_filter = Q(type__in=['RECORD_PAYMENT', 'FUNDING'])
+    # Include TRADE transactions for turnover calculation (needed for turnover metrics)
+    settled_filter = Q(type__in=['RECORD_PAYMENT', 'FUNDING', 'TRADE'])
     
     # Add profit/loss transactions that are settled
     # Note: This section is for old transaction types that don't exist in PIN-TO-PIN
@@ -1902,6 +2211,10 @@ def report_overview(request):
     clients_qs = Client.objects.filter(user=request.user)
     all_clients = clients_qs.order_by("name")
     
+    # Get exchanges for dropdown
+    from core.models import Exchange
+    all_exchanges = Exchange.objects.all().order_by("name")
+    
     # Get selected client if specified
     selected_client = None
     if client_id:
@@ -1913,10 +2226,18 @@ def report_overview(request):
 
     
     # Overall totals (filtered by time travel if applicable)
-    # CORRECTNESS LOGIC: Turnover = Cash Turnover
-    # Turnover = Σ(|RECORD_PAYMENT.amount|) - sum of absolute values (total cash movement)
-    turnover_qs = base_qs.filter(type='RECORD_PAYMENT')
-    total_turnover = turnover_qs.aggregate(total=Sum(Abs(F("amount"))))["total"] or 0
+    # CORRECTNESS LOGIC: Turnover = Σ(|ExchangeBalanceAfter − ExchangeBalanceBefore|) for TRADE transactions only
+    # Turnover measures trading activity, NOT funding or settlements
+    trade_qs = base_qs.filter(type='TRADE').exclude(
+        exchange_balance_before__isnull=True
+    ).exclude(
+        exchange_balance_after__isnull=True
+    )
+    # Calculate turnover as sum of absolute exchange balance movements from trades
+    total_turnover = sum(
+        abs(tx.exchange_balance_after - tx.exchange_balance_before)
+        for tx in trade_qs
+    ) or 0
     
     # 📘 YOUR TOTAL PROFIT Calculation (CORRECTNESS LOGIC)
     # SINGLE SOURCE OF TRUTH: RECORD_PAYMENT transactions only
@@ -1935,6 +2256,10 @@ def report_overview(request):
     # Apply client filter (if specified)
     if client_id:
         payment_qs = payment_qs.filter(client_exchange__client_id=client_id)
+    
+    # Apply exchange filter (if specified)
+    if exchange_id:
+        payment_qs = payment_qs.filter(client_exchange__exchange_id=exchange_id)
     
     # Apply date filter (if specified) - convert date to datetime for comparison
     if date_filter:
@@ -2048,17 +2373,21 @@ def report_overview(request):
     
     daily_data = defaultdict(lambda: {"profit": 0, "loss": 0, "turnover": 0})
     
-    daily_transactions = base_qs.filter(
-        type='RECORD_PAYMENT',
+    # Daily turnover from TRADE transactions (exchange balance movement)
+    daily_trades = base_qs.filter(
+        type='TRADE',
         date__gte=start_date,
         date__lte=end_date
-    ).values("date").annotate(
-        turnover_sum=Sum(Abs(F("amount")))
+    ).exclude(
+        exchange_balance_before__isnull=True
+    ).exclude(
+        exchange_balance_after__isnull=True
     )
     
-    for item in daily_transactions:
-        tx_date = item['date']
-        daily_data[tx_date]["turnover"] += float(item["turnover_sum"] or 0)
+    for tx in daily_trades:
+        tx_date = tx.date
+        turnover_amount = abs(tx.exchange_balance_after - tx.exchange_balance_before)
+        daily_data[tx_date]["turnover"] += float(turnover_amount)
     
     # Daily profit/loss from RECORD_PAYMENT transactions (CORRECTNESS LOGIC)
     daily_payments = base_qs.filter(
@@ -2166,7 +2495,16 @@ def report_overview(request):
             total=Sum("amount")
         )["total"] or 0)
         
-        month_turnover_val = month_payments.aggregate(total=Sum(Abs(F("amount"))))["total"] or 0
+        # Turnover from TRADE transactions (exchange balance movement)
+        month_trade_qs = month_transactions.filter(type='TRADE').exclude(
+            exchange_balance_before__isnull=True
+        ).exclude(
+            exchange_balance_after__isnull=True
+        )
+        month_turnover_val = sum(
+            abs(tx.exchange_balance_after - tx.exchange_balance_before)
+            for tx in month_trade_qs
+        ) or 0
         
         monthly_profit.insert(0, float(month_profit_val))
         monthly_loss.insert(0, float(month_loss_val))
@@ -2197,7 +2535,7 @@ def report_overview(request):
             date__lte=week_end
         )
         
-        # Weekly profit/loss and turnover from RECORD_PAYMENT transactions only (CORRECTNESS LOGIC)
+        # Weekly profit/loss from RECORD_PAYMENT transactions, turnover from TRADE transactions (CORRECTNESS LOGIC)
         week_payments = week_transactions.filter(type='RECORD_PAYMENT')
         week_profit_val = week_payments.filter(amount__gt=0).aggregate(
             total=Sum("amount")
@@ -2206,7 +2544,16 @@ def report_overview(request):
             total=Sum("amount")
         )["total"] or 0)
         
-        week_turnover_val = week_payments.aggregate(total=Sum(Abs(F("amount"))))["total"] or 0
+        # Turnover from TRADE transactions (exchange balance movement)
+        week_trade_qs = week_transactions.filter(type='TRADE').exclude(
+            exchange_balance_before__isnull=True
+        ).exclude(
+            exchange_balance_after__isnull=True
+        )
+        week_turnover_val = sum(
+            abs(tx.exchange_balance_after - tx.exchange_balance_before)
+            for tx in week_trade_qs
+        ) or 0
         
         weekly_profit.insert(0, float(week_profit_val))
         weekly_loss.insert(0, float(week_loss_val))
@@ -2222,8 +2569,10 @@ def report_overview(request):
         "report_type": report_type,
         "client_type_filter": client_type_filter,
         "all_clients": all_clients,
+        "all_exchanges": all_exchanges,
         "selected_client": selected_client,
         "selected_client_id": int(client_id) if client_id else None,
+        "selected_exchange_id": int(exchange_id) if exchange_id else None,
         "today": today,
         "total_turnover": total_turnover,
         "your_total_profit": your_total_profit,
@@ -2311,10 +2660,18 @@ def time_travel_report(request):
         start_date = None
         end_date = None
 
-    # CORRECTNESS LOGIC: Use RECORD_PAYMENT transactions only
-    # Turnover = Σ(|RECORD_PAYMENT.amount|) - sum of absolute values
-    payment_qs = qs.filter(type='RECORD_PAYMENT')
-    total_turnover = payment_qs.aggregate(total=Sum(Abs(F("amount"))))["total"] or 0
+    # CORRECTNESS LOGIC: Turnover = Σ(|ExchangeBalanceAfter − ExchangeBalanceBefore|) for TRADE transactions only
+    # Turnover measures trading activity, NOT funding or settlements
+    trade_qs = qs.filter(type='TRADE').exclude(
+        exchange_balance_before__isnull=True
+    ).exclude(
+        exchange_balance_after__isnull=True
+    )
+    # Calculate turnover as sum of absolute exchange balance movements from trades
+    total_turnover = sum(
+        abs(tx.exchange_balance_after - tx.exchange_balance_before)
+        for tx in trade_qs
+    ) or 0
     
     # Your Total Profit = Sum(RECORD_PAYMENT.amount) - signed sum
     your_profit = payment_qs.aggregate(total=Sum("amount"))["total"] or Decimal(0)
@@ -2685,9 +3042,13 @@ def transaction_create(request):
                     client__user=request.user
                 )
                 
-                # Transactions are audit-only - create simple transaction record
+                # Transactions are audit-only - create transaction record with balances
+                # For manual transactions, before = after (no balance change)
+                funding_before = client_exchange.funding
+                exchange_before = client_exchange.exchange_balance
+            
                 transaction = Transaction.objects.create(
-                    client_exchange=client_exchange,
+                client_exchange=client_exchange,
                     date=timezone.make_aware(datetime.strptime(tx_date, "%Y-%m-%d").date()),
                     type=tx_type,  # Use 'type' field
                     amount=int(amount),
@@ -2898,10 +3259,21 @@ def report_daily(request):
     
     qs = Transaction.objects.filter(**base_filter)
     
-    # CORRECTNESS LOGIC: Use RECORD_PAYMENT transactions only (same as overview report)
-    # Turnover = Σ(|RECORD_PAYMENT.amount|) - sum of absolute values
+    # CORRECTNESS LOGIC: Turnover = Σ(|ExchangeBalanceAfter − ExchangeBalanceBefore|) for TRADE transactions only
+    # Turnover measures trading activity, NOT funding or settlements
+    trade_qs = qs.filter(type='TRADE').exclude(
+        exchange_balance_before__isnull=True
+    ).exclude(
+        exchange_balance_after__isnull=True
+    )
+    # Calculate turnover as sum of absolute exchange balance movements from trades
+    total_turnover = sum(
+        abs(tx.exchange_balance_after - tx.exchange_balance_before)
+        for tx in trade_qs
+    ) or 0
+    
+    # Your Total Profit = Sum(RECORD_PAYMENT.amount) - signed sum
     payment_qs = qs.filter(type='RECORD_PAYMENT')
-    total_turnover = payment_qs.aggregate(total=Sum(Abs(F("amount"))))["total"] or 0
     
     # Your Total Profit = Sum(RECORD_PAYMENT.amount) - signed sum
     your_total_profit = payment_qs.aggregate(total=Sum("amount"))["total"] or Decimal(0)
@@ -2940,12 +3312,37 @@ def report_daily(request):
             type_colors.append(color)
 
     
-    # Client-wise breakdown (using RECORD_PAYMENT transactions)
-    client_data = payment_qs.values("client_exchange__client__name").annotate(
+    # Client-wise breakdown
+    # Profit/Loss from RECORD_PAYMENT transactions
+    client_payment_data = payment_qs.values("client_exchange__client__name").annotate(
         profit=Sum("amount", filter=Q(amount__gt=0)),
-        loss=Sum(Abs(F("amount")), filter=Q(amount__lt=0)),
-        turnover=Sum(Abs(F("amount")))
-    ).order_by("-turnover")[:10]
+        loss=Sum(Abs(F("amount")), filter=Q(amount__lt=0))
+    )
+    
+    # Turnover from TRADE transactions (exchange balance movement) per client
+    client_trade_qs = trade_qs.values("client_exchange__client__name")
+    client_turnover_map = {}
+    for client_name in client_trade_qs.values_list("client_exchange__client__name", flat=True).distinct():
+        client_trades = trade_qs.filter(client_exchange__client__name=client_name)
+        client_turnover = sum(
+            abs(tx.exchange_balance_after - tx.exchange_balance_before)
+            for tx in client_trades
+        ) or 0
+        client_turnover_map[client_name] = client_turnover
+    
+    # Combine profit/loss and turnover data
+    client_data = []
+    for item in client_payment_data:
+        client_name = item["client_exchange__client__name"]
+        client_data.append({
+            "client_exchange__client__name": client_name,
+            "profit": item["profit"] or 0,
+            "loss": item["loss"] or 0,
+            "turnover": client_turnover_map.get(client_name, 0)
+        })
+    
+    # Sort by turnover and limit to top 10
+    client_data = sorted(client_data, key=lambda x: x["turnover"], reverse=True)[:10]
     
     client_labels = [item["client_exchange__client__name"] for item in client_data]
     client_profits = [float(item["profit"] or 0) for item in client_data]
@@ -2996,12 +3393,21 @@ def report_weekly(request):
     
     qs = Transaction.objects.filter(client_exchange__client__user=request.user, date__gte=week_start, date__lte=week_end)
     
-    # CORRECTNESS LOGIC: Use RECORD_PAYMENT transactions only
-    # Turnover = Σ(|RECORD_PAYMENT.amount|) - sum of absolute values
-    payment_qs = qs.filter(type='RECORD_PAYMENT')
-    total_turnover = payment_qs.aggregate(total=Sum(Abs(F("amount"))))["total"] or 0
+    # CORRECTNESS LOGIC: Turnover = Σ(|ExchangeBalanceAfter − ExchangeBalanceBefore|) for TRADE transactions only
+    # Turnover measures trading activity, NOT funding or settlements
+    trade_qs = qs.filter(type='TRADE').exclude(
+        exchange_balance_before__isnull=True
+    ).exclude(
+        exchange_balance_after__isnull=True
+    )
+    # Calculate turnover as sum of absolute exchange balance movements from trades
+    total_turnover = sum(
+        abs(tx.exchange_balance_after - tx.exchange_balance_before)
+        for tx in trade_qs
+    ) or 0
     
     # Your Total Profit = Sum(RECORD_PAYMENT.amount) - signed sum
+    payment_qs = qs.filter(type='RECORD_PAYMENT')
     your_total_profit = payment_qs.aggregate(total=Sum("amount"))["total"] or Decimal(0)
     
     # Income from clients = Sum of positive amounts
@@ -3025,10 +3431,20 @@ def report_weekly(request):
         daily_labels.append(current_date.strftime("%a %d"))
         
         day_qs = qs.filter(date=current_date)
+        # Profit/Loss from RECORD_PAYMENT transactions
         day_payment_qs = day_qs.filter(type='RECORD_PAYMENT')
         day_profit = day_payment_qs.filter(amount__gt=0).aggregate(total=Sum("amount"))["total"] or 0
         day_loss = abs(day_payment_qs.filter(amount__lt=0).aggregate(total=Sum("amount"))["total"] or 0)
-        day_turnover = day_payment_qs.aggregate(total=Sum(Abs(F("amount"))))["total"] or 0
+        # Turnover from TRADE transactions (exchange balance movement)
+        day_trade_qs = day_qs.filter(type='TRADE').exclude(
+            exchange_balance_before__isnull=True
+        ).exclude(
+            exchange_balance_after__isnull=True
+        )
+        day_turnover = sum(
+            abs(tx.exchange_balance_after - tx.exchange_balance_before)
+            for tx in day_trade_qs
+        ) or 0
         
         daily_profit.append(float(day_profit))
         daily_loss.append(float(day_loss))
@@ -3107,12 +3523,21 @@ def report_monthly(request):
     
     qs = Transaction.objects.filter(client_exchange__client__user=request.user, date__gte=month_start, date__lte=month_end)
     
-    # CORRECTNESS LOGIC: Use RECORD_PAYMENT transactions only
-    # Turnover = Σ(|RECORD_PAYMENT.amount|) - sum of absolute values
-    payment_qs = qs.filter(type='RECORD_PAYMENT')
-    total_turnover = payment_qs.aggregate(total=Sum(Abs(F("amount"))))["total"] or 0
+    # CORRECTNESS LOGIC: Turnover = Σ(|ExchangeBalanceAfter − ExchangeBalanceBefore|) for TRADE transactions only
+    # Turnover measures trading activity, NOT funding or settlements
+    trade_qs = qs.filter(type='TRADE').exclude(
+        exchange_balance_before__isnull=True
+    ).exclude(
+        exchange_balance_after__isnull=True
+    )
+    # Calculate turnover as sum of absolute exchange balance movements from trades
+    total_turnover = sum(
+        abs(tx.exchange_balance_after - tx.exchange_balance_before)
+        for tx in trade_qs
+    ) or 0
     
     # Your Total Profit = Sum(RECORD_PAYMENT.amount) - signed sum
+    payment_qs = qs.filter(type='RECORD_PAYMENT')
     your_total_profit = payment_qs.aggregate(total=Sum("amount"))["total"] or Decimal(0)
     
     # Income from clients = Sum of positive amounts
@@ -3138,10 +3563,20 @@ def report_monthly(request):
         weekly_labels.append(f"Week {week_num} ({current_date.strftime('%d')}-{week_end_date.strftime('%d %b')})")
         
         week_qs = qs.filter(date__gte=current_date, date__lte=week_end_date)
+        # Profit/Loss from RECORD_PAYMENT transactions
         week_payment_qs = week_qs.filter(type='RECORD_PAYMENT')
         week_profit = week_payment_qs.filter(amount__gt=0).aggregate(total=Sum("amount"))["total"] or 0
         week_loss = abs(week_payment_qs.filter(amount__lt=0).aggregate(total=Sum("amount"))["total"] or 0)
-        week_turnover = week_payment_qs.aggregate(total=Sum(Abs(F("amount"))))["total"] or 0
+        # Turnover from TRADE transactions (exchange balance movement)
+        week_trade_qs = week_qs.filter(type='TRADE').exclude(
+            exchange_balance_before__isnull=True
+        ).exclude(
+            exchange_balance_after__isnull=True
+        )
+        week_turnover = sum(
+            abs(tx.exchange_balance_after - tx.exchange_balance_before)
+            for tx in week_trade_qs
+        ) or 0
         
         weekly_profit.append(float(week_profit))
         weekly_loss.append(float(week_loss))
@@ -3174,11 +3609,35 @@ def report_monthly(request):
             type_colors.append(color)
 
     
-    # Top clients (using RECORD_PAYMENT transactions)
-    client_data = payment_qs.values("client_exchange__client__name").annotate(
-        profit=Sum("amount", filter=Q(amount__gt=0)),
-        turnover=Sum(Abs(F("amount")))
-    ).order_by("-profit")[:10]
+    # Top clients
+    # Profit from RECORD_PAYMENT transactions
+    client_payment_data = payment_qs.values("client_exchange__client__name").annotate(
+        profit=Sum("amount", filter=Q(amount__gt=0))
+    )
+    
+    # Turnover from TRADE transactions (exchange balance movement) per client
+    client_trade_qs = trade_qs.values("client_exchange__client__name")
+    client_turnover_map = {}
+    for client_name in client_trade_qs.values_list("client_exchange__client__name", flat=True).distinct():
+        client_trades = trade_qs.filter(client_exchange__client__name=client_name)
+        client_turnover = sum(
+            abs(tx.exchange_balance_after - tx.exchange_balance_before)
+            for tx in client_trades
+        ) or 0
+        client_turnover_map[client_name] = client_turnover
+    
+    # Combine profit and turnover data
+    client_data = []
+    for item in client_payment_data:
+        client_name = item["client_exchange__client__name"]
+        client_data.append({
+            "client_exchange__client__name": client_name,
+            "profit": item["profit"] or 0,
+            "turnover": client_turnover_map.get(client_name, 0)
+        })
+    
+    # Sort by profit and limit to top 10
+    client_data = sorted(client_data, key=lambda x: x["profit"] or 0, reverse=True)[:10]
     
     client_labels = [item["client_exchange__client__name"] for item in client_data]
     client_profits = [float(item["profit"] or 0) for item in client_data]
@@ -3235,10 +3694,18 @@ def report_custom(request):
     
     qs = Transaction.objects.filter(client_exchange__client__user=request.user, date__gte=start_date, date__lte=end_date)
     
-    # CORRECTNESS LOGIC: Use RECORD_PAYMENT transactions only
-    # Turnover = Σ(|RECORD_PAYMENT.amount|) - sum of absolute values
-    payment_qs = qs.filter(type='RECORD_PAYMENT')
-    total_turnover = payment_qs.aggregate(total=Sum(Abs(F("amount"))))["total"] or 0
+    # CORRECTNESS LOGIC: Turnover = Σ(|ExchangeBalanceAfter − ExchangeBalanceBefore|) for TRADE transactions only
+    # Turnover measures trading activity, NOT funding or settlements
+    trade_qs = qs.filter(type='TRADE').exclude(
+        exchange_balance_before__isnull=True
+    ).exclude(
+        exchange_balance_after__isnull=True
+    )
+    # Calculate turnover as sum of absolute exchange balance movements from trades
+    total_turnover = sum(
+        abs(tx.exchange_balance_after - tx.exchange_balance_before)
+        for tx in trade_qs
+    ) or 0
     
     # Your Total Profit = Sum(RECORD_PAYMENT.amount) - signed sum
     your_profit = payment_qs.aggregate(total=Sum("amount"))["total"] or Decimal(0)
@@ -3332,10 +3799,18 @@ def report_client(request, client_pk):
 
         qs = Transaction.objects.filter(client_exchange__client=client)
 
-    # CORRECTNESS LOGIC: Use RECORD_PAYMENT transactions only
-    # Turnover = Σ(|RECORD_PAYMENT.amount|) - sum of absolute values
-    payment_qs = qs.filter(type='RECORD_PAYMENT')
-    total_turnover = payment_qs.aggregate(total=Sum(Abs(F("amount"))))["total"] or 0
+    # CORRECTNESS LOGIC: Turnover = Σ(|ExchangeBalanceAfter − ExchangeBalanceBefore|) for TRADE transactions only
+    # Turnover measures trading activity, NOT funding or settlements
+    trade_qs = qs.filter(type='TRADE').exclude(
+        exchange_balance_before__isnull=True
+    ).exclude(
+        exchange_balance_after__isnull=True
+    )
+    # Calculate turnover as sum of absolute exchange balance movements from trades
+    total_turnover = sum(
+        abs(tx.exchange_balance_after - tx.exchange_balance_before)
+        for tx in trade_qs
+    ) or 0
     
     # Your Total Profit = Sum(RECORD_PAYMENT.amount) - signed sum
     your_profit = payment_qs.aggregate(total=Sum("amount"))["total"] or Decimal(0)
@@ -3514,6 +3989,10 @@ def add_funding(request, account_id):
         amount_str = request.POST.get("amount", "").strip()
         notes = request.POST.get("notes", "").strip()
         
+        # Strip commas and any non-digit characters (safety check)
+        if amount_str:
+            amount_str = amount_str.replace(',', '').replace('₹', '').strip()
+        
         if not amount_str:
             from django.contrib import messages
             messages.error(request, "Amount is required.")
@@ -3532,8 +4011,8 @@ def add_funding(request, account_id):
             
             # FUNDING RULE: Both funding and exchange_balance increase by the same amount
             # Manual funding closes old cycle and starts new cycle
-            old_funding = account.funding
-            old_balance = account.exchange_balance
+            funding_before = account.funding
+            exchange_before = account.exchange_balance
             
             account.funding += amount
             account.exchange_balance += amount
@@ -3543,12 +4022,15 @@ def add_funding(request, account_id):
             
             account.save()
             
-            # Create transaction record for audit trail
+            # Create FUNDING_MANUAL transaction with before/after balances
             Transaction.objects.create(
                 client_exchange=account,
                 date=timezone.now(),
-                type='FUNDING',
+                type='FUNDING_MANUAL',
                 amount=amount,
+                funding_before=funding_before,
+                funding_after=account.funding,
+                exchange_balance_before=exchange_before,
                 exchange_balance_after=account.exchange_balance,
                 notes=notes or f"Manual funding added: {amount}"
             )
@@ -3557,8 +4039,8 @@ def add_funding(request, account_id):
             messages.success(
                 request,
                 f"Funding of {amount} added successfully. "
-                f"Funding: {old_funding} → {account.funding}, "
-                f"Balance: {old_balance} → {account.exchange_balance}"
+                f"Funding: {funding_before} → {account.funding}, "
+                f"Balance: {exchange_before} → {account.exchange_balance}"
             )
             return redirect(reverse("exchange_account_detail", args=[account.pk]))
             
@@ -3604,28 +4086,32 @@ def update_exchange_balance(request, account_id):
                     'account': account
                 })
             
-            old_balance = account.exchange_balance
-            balance_change = new_balance - old_balance
+            exchange_before = account.exchange_balance
+            funding_before = account.funding
+            balance_change = new_balance - exchange_before
             
-            # Only exchange_balance changes, funding stays the same
+            # Only exchange_balance changes, funding stays the same (TRADE)
             account.exchange_balance = new_balance
             account.save()
             
-            # Create transaction record for audit trail
+            # Create transaction with before/after balances
             Transaction.objects.create(
                 client_exchange=account,
                 date=timezone.now(),
                 type=tx_type,
                 amount=abs(balance_change),  # Store absolute value
+                funding_before=funding_before,
+                funding_after=account.funding,  # Unchanged
+                exchange_balance_before=exchange_before,
                 exchange_balance_after=new_balance,
-                notes=notes or f"Balance updated: {old_balance} → {new_balance} ({balance_change:+})"
+                notes=notes or f"{tx_type}: Balance updated {exchange_before} → {new_balance} ({balance_change:+})"
             )
             
             from django.contrib import messages
             messages.success(
                 request,
                 f"Balance updated successfully. "
-                f"Exchange Balance: {old_balance} → {new_balance} ({balance_change:+})"
+                f"Exchange Balance: {exchange_before} → {new_balance} ({balance_change:+})"
             )
             return redirect(reverse("exchange_account_detail", args=[account.pk]))
             
@@ -3743,29 +4229,27 @@ def record_payment(request, account_id):
                         .get(pk=account_id, client__user=request.user)
                     )
                     
-                    # CRITICAL FIX (FAIL CASE 1): Calculate Client_PnL BEFORE any balance updates
-                    # Golden Rule: Transaction sign must be decided BEFORE balance mutation
+                    # ============================================================
+                    # SETTLEMENT FLOW - EXACT ORDER (NON-NEGOTIABLE)
+                    # ============================================================
+                    # 1. Read balances (lock row) - DONE above with select_for_update
+                    funding_before = account.funding
+                    exchange_before = account.exchange_balance
+                    
+                    # 2. Compute PnL BEFORE update
                     client_pnl_before = account.compute_client_pnl()
                     
-                    # CRITICAL FIX (FAIL CASE 6): Check if PnL = 0 (trading flat, not settlement complete)
-                    if client_pnl_before == 0:
-                        from django.contrib import messages
-                        messages.warning(request, "Account PnL is zero (trading flat). No settlement needed.")
-                        if redirect_to == 'pending_summary':
-                            return redirect(reverse("pending_summary"))
-                        return redirect(reverse("exchange_account_detail", args=[account.pk]))
-                    
-                    # CRITICAL FIX: Lock share at first compute per PnL cycle
+                    # 3. Lock share (if needed)
                     account.lock_initial_share_if_needed()
                     
-                    # Get settlement info using LOCKED share
+                    # 4. Validate remaining
                     settlement_info = account.get_remaining_settlement_amount()
                     initial_final_share = settlement_info['initial_final_share']
                     remaining_amount = settlement_info['remaining']
                     overpaid_amount = settlement_info['overpaid']
                     total_settled = settlement_info['total_settled']
                     
-                    # MASKED SHARE SETTLEMENT SYSTEM: Block settlement when InitialFinalShare = 0
+                    # Block settlement when InitialFinalShare = 0
                     if initial_final_share == 0:
                         from django.contrib import messages
                         messages.warning(
@@ -3776,54 +4260,27 @@ def record_payment(request, account_id):
                             return redirect(reverse("pending_summary"))
                         return redirect(reverse("exchange_account_detail", args=[account.pk]))
                     
-                    # MASKED SHARE SETTLEMENT SYSTEM: Validate against remaining settlement amount (ATOMIC)
+                    # Validate against remaining settlement amount
                     if paid_amount > remaining_amount:
                         raise ValidationError(
                             f"Paid amount ({paid_amount}) cannot exceed remaining settlement amount ({remaining_amount}). "
                             f"Initial share: {initial_final_share}, Already settled: {total_settled}"
                         )
                     
-                    # CRITICAL FIX (FAIL CASE 1): Decide transaction sign BEFORE balance update
-                    # CORRECTNESS LOGIC: Sign depends ONLY on Client_PnL BEFORE payment
-                    # IF Client_PnL > 0 (client in profit): Transaction.amount = -SharePayment (you paid client)
-                    # ELSE IF Client_PnL < 0 (client in loss): Transaction.amount = +SharePayment (client paid you)
-                    if client_pnl_before > 0:
-                        # PROFIT CASE: YOU pay client → amount is NEGATIVE (your loss)
-                        transaction_amount = -paid_amount
-                    elif client_pnl_before < 0:
-                        # LOSS CASE: Client pays YOU → amount is POSITIVE (your profit)
-                        transaction_amount = paid_amount
-                    else:
-                        # PnL = 0 (should not happen due to earlier check, but handle gracefully)
-                        transaction_amount = 0
+                    # Check if PnL = 0 (trading flat, not settlement complete)
+                    if client_pnl_before == 0:
+                        from django.contrib import messages
+                        messages.warning(request, "Account PnL is zero (trading flat). No settlement needed.")
+                        if redirect_to == 'pending_summary':
+                            return redirect(reverse("pending_summary"))
+                        return redirect(reverse("exchange_account_detail", args=[account.pk]))
                     
-                    # Apply RECORD PAYMENT logic (MASKED SHARE SETTLEMENT SYSTEM)
-                    old_funding = account.funding
-                    old_balance = account.exchange_balance
-                    
-                    # CRITICAL FIX: Use locked share percentage (prevents historical rewrite)
-                    locked_share_pct = account.locked_share_percentage
-                    if locked_share_pct is None or locked_share_pct == 0:
-                        # Fallback to current share percentage if not locked yet
-                        locked_share_pct = account.get_share_percentage(client_pnl_before)
-                    
-                    # CRITICAL FIX: MaskedCapital formula - map linearly back to PnL
-                    # Formula: MaskedCapital = (SharePayment × abs(LockedInitialPnL)) / LockedInitialFinalShare
-                    # This ensures SharePayment maps back to PnL linearly, not exponentially
-                    # This prevents double-counting of share percentage
-                    if initial_final_share == 0:
+                    # 5. Compute masked capital
+                    masked_capital = account.compute_masked_capital(paid_amount)
+                    if masked_capital == 0:
                         raise ValidationError(
                             "Cannot calculate masked capital. Initial final share is zero."
                         )
-                    
-                    # Use locked initial PnL (must exist if initial_final_share > 0)
-                    locked_initial_pnl = account.locked_initial_pnl
-                    if locked_initial_pnl is None:
-                        # Should not happen if share is locked correctly
-                        locked_initial_pnl = abs(client_pnl_before)
-                    
-                    # Use helper method to compute masked capital
-                    masked_capital = account.compute_masked_capital(paid_amount)
                     
                     # Get re-add capital option (LOSS CASE ONLY)
                     re_add_capital = False
@@ -3840,70 +4297,80 @@ def record_payment(request, account_id):
                                 "Funding must never increase when paying profits."
                             )
                     
-                    # CRITICAL: Validate that funding/exchange_balance won't go negative
+                    # Decide transaction sign BEFORE balance update
+                    if client_pnl_before > 0:
+                        # PROFIT CASE: YOU pay client → amount is NEGATIVE (your loss)
+                        transaction_amount = -paid_amount
+                    elif client_pnl_before < 0:
+                        # LOSS CASE: Client pays YOU → amount is POSITIVE (your profit)
+                        transaction_amount = paid_amount
+                    else:
+                        transaction_amount = 0
+                    
+                    # 6. Save SETTLEMENT_SHARE transaction (BEFORE balance update)
+                    # Validate that funding/exchange_balance won't go negative
                     if client_pnl_before < 0:
                         # LOSS CASE: Masked capital reduces Funding
-                        # RULE 1: Funding = Funding − MaskedCapital
-                        # ExchangeBalance = ExchangeBalance (unchanged)
                         if account.funding - int(masked_capital) < 0:
                             raise ValidationError(
                                 f"Cannot record payment. Funding would become negative "
                                 f"(Current: {account.funding}, Masked Capital: {int(masked_capital)})."
                             )
-                        account.funding -= int(masked_capital)
-                        # Exchange balance remains unchanged in loss case
-                        action_desc = f"Funding reduced: {old_funding} → {account.funding} (Masked Capital: {int(masked_capital)}, SharePayment: {paid_amount})"
+                        funding_after_settlement = account.funding - int(masked_capital)
+                        exchange_after_settlement = account.exchange_balance  # Unchanged
                     else:
                         # PROFIT CASE: Masked capital reduces Exchange Balance
-                        # RULE 2: ExchangeBalance = ExchangeBalance − MaskedCapital
-                        # Funding = Funding (NO CHANGE - NEVER INCREASES)
                         if account.exchange_balance - int(masked_capital) < 0:
                             raise ValidationError(
                                 f"Cannot record payment. Exchange balance would become negative "
                                 f"(Current: {account.exchange_balance}, Masked Capital: {int(masked_capital)})."
                             )
-                        account.exchange_balance -= int(masked_capital)
-                        # Funding remains unchanged in profit case (CRITICAL RULE)
-                        action_desc = f"Exchange balance reduced: {old_balance} → {account.exchange_balance} (Masked Capital: {int(masked_capital)}, SharePayment: {paid_amount})"
+                        funding_after_settlement = account.funding  # Unchanged (CRITICAL RULE)
+                        exchange_after_settlement = account.exchange_balance - int(masked_capital)
                     
-                    # Save account changes
+                    # 7. Update balances
+                    account.funding = funding_after_settlement
+                    account.exchange_balance = exchange_after_settlement
                     account.save()
                     
-                    # MASKED SHARE SETTLEMENT SYSTEM: Create Settlement record
+                    # Create Settlement record
                     settlement = Settlement.objects.create(
                         client_exchange=account,
                         amount=paid_amount,
                         date=payment_date,
-                        notes=notes or f"Payment recorded: {paid_amount}. {action_desc}"
+                        notes=notes or f"Payment recorded: {paid_amount}"
                     )
                     
-                    # Create transaction record for audit trail
-                    # Transaction sign was already decided BEFORE balance update (FAIL CASE 1 FIX)
+                    # Create SETTLEMENT_SHARE transaction with before/after balances
                     Transaction.objects.create(
                         client_exchange=account,
                         date=payment_date,
-                        type='RECORD_PAYMENT',
-                        amount=transaction_amount,  # Positive if client pays you, negative if you pay client
-                        exchange_balance_after=account.exchange_balance,
-                        notes=notes or f"Payment recorded: {paid_amount}. {action_desc}"
+                        type='SETTLEMENT_SHARE',
+                        amount=transaction_amount,
+                        funding_before=funding_before,
+                        funding_after=funding_after_settlement,
+                        exchange_balance_before=exchange_before,
+                        exchange_balance_after=exchange_after_settlement,
+                        notes=notes or f"Settlement share payment: {paid_amount}. Masked Capital: {int(masked_capital)}"
                     )
                     
-                    # OPTIONAL: Auto Re-Funding (LOSS CASE ONLY)
-                    # This is NOT settlement - it's new capital injection
-                    # Must be recorded as a separate transaction
+                    # 8. IF auto-refund enabled: Save FUNDING_AUTO transaction
                     cycle_closed = False
                     if re_add_capital and client_pnl_before < 0:
-                        # Re-add capital: Funding = Funding + MaskedCapital
+                        # Auto re-funding: Funding = Funding + MaskedCapital
                         # ExchangeBalance = ExchangeBalance + MaskedCapital
+                        funding_before_refund = account.funding
+                        exchange_before_refund = account.exchange_balance
+                        
                         account.funding += int(masked_capital)
                         account.exchange_balance += int(masked_capital)
                         account.save()
                         
-                        # Create separate transaction for auto re-funding
+                        # Create separate FUNDING_AUTO transaction
                         Transaction.objects.create(
                             client_exchange=account,
                             date=payment_date,
-                            type='FUNDING',
+                            type='FUNDING_AUTO',
                             amount=int(masked_capital),
                             exchange_balance_after=account.exchange_balance,
                             notes=f"Auto Re-Funding after settlement (linked to Settlement ID: {settlement.id}). "
@@ -4087,12 +4554,21 @@ def report_exchange(request, exchange_pk):
         date__lte=end_date
     )
     
-    # CORRECTNESS LOGIC: Use RECORD_PAYMENT transactions only
-    # Turnover = Σ(|RECORD_PAYMENT.amount|) - sum of absolute values
-    payment_qs = qs.filter(type='RECORD_PAYMENT')
-    total_turnover = payment_qs.aggregate(total=Sum(Abs(F("amount"))))["total"] or 0
+    # CORRECTNESS LOGIC: Turnover = Σ(|ExchangeBalanceAfter − ExchangeBalanceBefore|) for TRADE transactions only
+    # Turnover measures trading activity, NOT funding or settlements
+    trade_qs = qs.filter(type='TRADE').exclude(
+        exchange_balance_before__isnull=True
+    ).exclude(
+        exchange_balance_after__isnull=True
+    )
+    # Calculate turnover as sum of absolute exchange balance movements from trades
+    total_turnover = sum(
+        abs(tx.exchange_balance_after - tx.exchange_balance_before)
+        for tx in trade_qs
+    ) or 0
     
     # Your Total Profit = Sum(RECORD_PAYMENT.amount) - signed sum
+    payment_qs = qs.filter(type='RECORD_PAYMENT')
     your_total_profit = payment_qs.aggregate(total=Sum("amount"))["total"] or Decimal(0)
     
     # Income from clients = Sum of positive amounts
@@ -4133,11 +4609,35 @@ def report_exchange(request, exchange_pk):
             type_colors.append(color)
 
     
-    # Client-wise breakdown (using RECORD_PAYMENT transactions)
-    client_data = payment_qs.values("client_exchange__client__name").annotate(
-        profit=Sum("amount", filter=Q(amount__gt=0)),
-        turnover=Sum(Abs(F("amount")))
-    ).order_by("-profit")[:10]
+    # Client-wise breakdown
+    # Profit from RECORD_PAYMENT transactions
+    client_payment_data = payment_qs.values("client_exchange__client__name").annotate(
+        profit=Sum("amount", filter=Q(amount__gt=0))
+    )
+    
+    # Turnover from TRADE transactions (exchange balance movement) per client
+    client_trade_qs = trade_qs.values("client_exchange__client__name")
+    client_turnover_map = {}
+    for client_name in client_trade_qs.values_list("client_exchange__client__name", flat=True).distinct():
+        client_trades = trade_qs.filter(client_exchange__client__name=client_name)
+        client_turnover = sum(
+            abs(tx.exchange_balance_after - tx.exchange_balance_before)
+            for tx in client_trades
+        ) or 0
+        client_turnover_map[client_name] = client_turnover
+    
+    # Combine profit and turnover data
+    client_data = []
+    for item in client_payment_data:
+        client_name = item["client_exchange__client__name"]
+        client_data.append({
+            "client_exchange__client__name": client_name,
+            "profit": item["profit"] or 0,
+            "turnover": client_turnover_map.get(client_name, 0)
+        })
+    
+    # Sort by profit and limit to top 10
+    client_data = sorted(client_data, key=lambda x: x["profit"] or 0, reverse=True)[:10]
     
     client_labels = [item["client_exchange__client__name"] for item in client_data]
     client_profits = [float(item["profit"] or 0) for item in client_data]
@@ -4263,21 +4763,20 @@ def client_balance(request, client_pk):
 
                 balance_note += f" (Updated at {datetime.now().strftime('%H:%M:%S')})"
 
+                # Create ADJUSTMENT transaction with before/after balances
+                funding_before = client_exchange.funding
+                exchange_before = old_balance
                 
                 Transaction.objects.create(
-
                     client_exchange=client_exchange,
-
                     date=balance_record_date_obj,
-
                     type='ADJUSTMENT',  # Balance updates are adjustments
-
                     amount=new_balance,
-
+                    funding_before=funding_before,
+                    funding_after=client_exchange.funding,  # Unchanged
+                    exchange_balance_before=exchange_before,
                     exchange_balance_after=new_balance,
-
                     notes=balance_note,
-
                 )
 
                 
@@ -4344,13 +4843,20 @@ def client_balance(request, client_pk):
                 
                 balance_note += f" (Recorded at {datetime.now().strftime('%H:%M:%S')})"
                 
+                # Create ADJUSTMENT transaction with before/after balances
+                funding_before = client_exchange.funding
+                exchange_before = old_balance
+                
                 Transaction.objects.create(
                     client_exchange=client_exchange,
                     date=balance_record_date_obj,
                     type='ADJUSTMENT',
                     amount=new_balance,
+                    funding_before=funding_before,
+                    funding_after=client_exchange.funding,  # Unchanged
+                    exchange_balance_before=exchange_before,
                     exchange_balance_after=new_balance,
-                    note=balance_note,
+                    notes=balance_note,
                 )
                 
                 # Note: create_loss_profit_from_balance_change is deprecated in PIN-TO-PIN
@@ -4410,7 +4916,16 @@ def client_balance(request, client_pk):
         # Transactions are audit-only - use account balances instead
         # Calculate from account directly
         total_funding = client_exchange.funding
-        total_turnover = transactions.filter(type='RECORD_PAYMENT').aggregate(total=Sum(Abs(F("amount"))))["total"] or 0
+        # Turnover from TRADE transactions (exchange balance movement)
+        account_trades = transactions.filter(type='TRADE').exclude(
+            exchange_balance_before__isnull=True
+        ).exclude(
+            exchange_balance_after__isnull=True
+        )
+        total_turnover = sum(
+            abs(tx.exchange_balance_after - tx.exchange_balance_before)
+            for tx in account_trades
+        ) or 0
         
         # Profit/loss calculated from account balances
         client_pnl = client_exchange.compute_client_pnl()

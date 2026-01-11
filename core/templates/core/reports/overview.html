@@ -4,6 +4,11 @@
 {% block page_title %}Reports & Analytics{% endblock %}
 {% block page_subtitle %}Comprehensive insights into your business performance{% endblock %}
 
+{% block extra_head %}
+<!-- Chart.js Library -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
 {% block content %}
 <style>
     .reports-wrapper {
@@ -96,6 +101,8 @@
         padding: 20px;
         margin-bottom: 20px;
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        position: relative;
+        min-height: 300px;
     }
     
     .chart-header {
@@ -105,6 +112,11 @@
         margin-bottom: 16px;
         padding-bottom: 12px;
         border-bottom: 1px solid #ddd;
+    }
+    
+    .chart-section canvas {
+        max-width: 100%;
+        height: auto !important;
     }
     
     .charts-grid {
@@ -174,23 +186,143 @@
             grid-template-columns: 1fr;
         }
     }
+    
+    /* Fixed center overlay dropdown - zero movement */
+    .client-dropdown {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        max-height: 400px;
+        overflow-y: auto;
+        z-index: 10000;
+        background: var(--bg-content);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        min-width: 300px;
+        max-width: 500px;
+        display: none;
+    }
+    
+    .client-dropdown.active {
+        display: block;
+    }
+    
+    .dropdown-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.3);
+        z-index: 9999;
+        display: none;
+    }
+    
+    .dropdown-overlay.active {
+        display: block;
+    }
+    
+    .dropdown-header {
+        padding: 16px;
+        border-bottom: 1px solid var(--border);
+        font-weight: 600;
+        font-size: 16px;
+        color: var(--text);
+    }
+    
+    .dropdown-options {
+        max-height: 320px;
+        overflow-y: auto;
+    }
+    
+    .dropdown-option {
+        padding: 12px 16px;
+        cursor: pointer;
+        transition: background 0.12s ease;
+        color: var(--text);
+        font-size: 15px;
+    }
+    
+    .dropdown-option:hover {
+        background: var(--accent-soft);
+    }
+    
+    .dropdown-option.selected {
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 500;
+    }
+    
+    .dropdown-trigger {
+        cursor: pointer;
+        position: relative;
+    }
 </style>
 
-<!-- Chart.js Library -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<!-- Dropdown Overlay -->
+<div class="dropdown-overlay" id="dropdownOverlay" onclick="closeDropdowns()"></div>
+
+<!-- Client Dropdown Modal -->
+<div class="client-dropdown" id="clientDropdown">
+    <div class="dropdown-header">Select Client</div>
+    <div class="dropdown-options" id="clientDropdownOptions">
+        <div class="dropdown-option {% if not selected_client_id %}selected{% endif %}" onclick="selectClient('', 'All Clients')">
+            All Clients
+        </div>
+        {% for client in all_clients %}
+        <div class="dropdown-option {% if selected_client_id == client.id %}selected{% endif %}" onclick="selectClient('{{ client.id }}', '{{ client.name }}{% if client.code %} ({{ client.code }}){% endif %}')">
+            {{ client.name }}{% if client.code %} ({{ client.code }}){% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Exchange Dropdown Modal -->
+<div class="client-dropdown" id="exchangeDropdown">
+    <div class="dropdown-header">Select Exchange</div>
+    <div class="dropdown-options" id="exchangeDropdownOptions">
+        <div class="dropdown-option {% if not selected_exchange_id %}selected{% endif %}" onclick="selectExchange('', 'All Exchanges')">
+            All Exchanges
+        </div>
+        {% for exchange in all_exchanges %}
+        <div class="dropdown-option {% if selected_exchange_id == exchange.id %}selected{% endif %}" onclick="selectExchange('{{ exchange.id }}', '{{ exchange.name }}{% if exchange.code %} ({{ exchange.code }}){% endif %}')">
+            {{ exchange.name }}{% if exchange.code %} ({{ exchange.code }}){% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
 
 <div class="reports-wrapper">
-    <!-- Client Filter and Month Selection -->
+    <!-- Client Filter, Exchange Filter and Month Selection -->
     <div class="filter-section">
         <label>Filter by Client:</label>
-        <select id="clientFilter" onchange="changeClient(this.value)">
-        <option value="">All Clients</option>
-        {% for client in all_clients %}
-        <option value="{{ client.id }}" {% if selected_client_id == client.id %}selected{% endif %}>{{ client.name }}{% if client.code %} ({{ client.code }}){% endif %}</option>
-        {% endfor %}
-    </select>
-    {% if selected_client_id %}
-        <a href="?report_type={{ report_type }}{% if client_type_filter %}&client_type={{ client_type_filter }}{% endif %}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}{% if selected_month %}&month={{ selected_month }}{% endif %}" class="btn-compact">Clear Filter</a>
+        <div class="dropdown-trigger" id="clientTrigger" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; background: #ffffff; min-width: 250px; cursor: pointer; display: flex; align-items: center; justify-content: space-between;" onclick="openClientDropdown()">
+            <span id="clientDisplay">{% if selected_client_id %}{% for client in all_clients %}{% if selected_client_id == client.id %}{{ client.name }}{% if client.code %} ({{ client.code }}){% endif %}{% endif %}{% endfor %}{% else %}All Clients{% endif %}</span>
+            <span style="color: #999;">▼</span>
+        </div>
+        <select id="clientSelect" style="display: none;">
+            <option value="">All Clients</option>
+            {% for client in all_clients %}
+            <option value="{{ client.id }}" {% if selected_client_id == client.id %}selected{% endif %}>{{ client.name }}{% if client.code %} ({{ client.code }}){% endif %}</option>
+            {% endfor %}
+        </select>
+        
+        <label style="margin-left: 20px;">Filter by Exchange:</label>
+        <div class="dropdown-trigger" id="exchangeTrigger" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; background: #ffffff; min-width: 250px; cursor: pointer; display: flex; align-items: center; justify-content: space-between;" onclick="openExchangeDropdown()">
+            <span id="exchangeDisplay">{% if selected_exchange_id %}{% for exchange in all_exchanges %}{% if selected_exchange_id == exchange.id %}{{ exchange.name }}{% if exchange.code %} ({{ exchange.code }}){% endif %}{% endif %}{% endfor %}{% else %}All Exchanges{% endif %}</span>
+            <span style="color: #999;">▼</span>
+        </div>
+        <select id="exchangeSelect" style="display: none;">
+            <option value="">All Exchanges</option>
+            {% for exchange in all_exchanges %}
+            <option value="{{ exchange.id }}" {% if selected_exchange_id == exchange.id %}selected{% endif %}>{{ exchange.name }}{% if exchange.code %} ({{ exchange.code }}){% endif %}</option>
+            {% endfor %}
+        </select>
+        
+    {% if selected_client_id or selected_exchange_id %}
+        <a href="?report_type={{ report_type }}{% if client_type_filter %}&client_type={{ client_type_filter }}{% endif %}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}{% if selected_month %}&month={{ selected_month }}{% endif %}" class="btn-compact">Clear Filters</a>
     {% endif %}
     {% if not all_clients %}
         <span style="font-size: 13px; color: #64748b; font-style: italic;">No clients available</span>
@@ -202,13 +334,13 @@
 
 <!-- Report Type Tabs -->
 <div class="tabs-simple">
-    <a href="?report_type=daily{% if client_type_filter %}&client_type={{ client_type_filter }}{% endif %}{% if selected_client_id %}&client={{ selected_client_id }}{% endif %}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}{% if selected_month %}&month={{ selected_month }}{% endif %}" onclick="return changeReportType('daily', event)" class="tab-simple {% if report_type == 'daily' %}active{% endif %}">
+    <a href="?report_type=daily{% if client_type_filter %}&client_type={{ client_type_filter }}{% endif %}{% if selected_client_id %}&client={{ selected_client_id }}{% endif %}{% if selected_exchange_id %}&exchange={{ selected_exchange_id }}{% endif %}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}{% if selected_month %}&month={{ selected_month }}{% endif %}" onclick="return changeReportType('daily', event)" class="tab-simple {% if report_type == 'daily' %}active{% endif %}">
         Daily
     </a>
-    <a href="?report_type=weekly{% if client_type_filter %}&client_type={{ client_type_filter }}{% endif %}{% if selected_client_id %}&client={{ selected_client_id }}{% endif %}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}{% if selected_month %}&month={{ selected_month }}{% endif %}" onclick="return changeReportType('weekly', event)" class="tab-simple {% if report_type == 'weekly' %}active{% endif %}">
+    <a href="?report_type=weekly{% if client_type_filter %}&client_type={{ client_type_filter }}{% endif %}{% if selected_client_id %}&client={{ selected_client_id }}{% endif %}{% if selected_exchange_id %}&exchange={{ selected_exchange_id }}{% endif %}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}{% if selected_month %}&month={{ selected_month }}{% endif %}" onclick="return changeReportType('weekly', event)" class="tab-simple {% if report_type == 'weekly' %}active{% endif %}">
         Weekly
     </a>
-    <a href="?report_type=monthly{% if client_type_filter %}&client_type={{ client_type_filter }}{% endif %}{% if selected_client_id %}&client={{ selected_client_id }}{% endif %}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}{% if selected_month %}&month={{ selected_month }}{% endif %}" onclick="return changeReportType('monthly', event)" class="tab-simple {% if report_type == 'monthly' %}active{% endif %}">
+    <a href="?report_type=monthly{% if client_type_filter %}&client_type={{ client_type_filter }}{% endif %}{% if selected_client_id %}&client={{ selected_client_id }}{% endif %}{% if selected_exchange_id %}&exchange={{ selected_exchange_id }}{% endif %}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}{% if selected_month %}&month={{ selected_month }}{% endif %}" onclick="return changeReportType('monthly', event)" class="tab-simple {% if report_type == 'monthly' %}active{% endif %}">
         Monthly
     </a>
 </div>
@@ -244,19 +376,25 @@
 <!-- Daily Report Section -->
     <div class="chart-section">
     <div class="chart-header">Daily Trends (Last 30 Days)</div>
-    <canvas id="dailyTrendsChart" style="max-height: 400px;"></canvas>
+    <div style="position: relative; height: 400px;">
+        <canvas id="dailyTrendsChart"></canvas>
+    </div>
 </div>
 
 <div class="charts-grid">
     <div class="chart-section">
         <div class="chart-header">Transaction Type Breakdown</div>
-        <canvas id="typeBreakdownChart" style="max-height: 320px;"></canvas>
+        <div style="position: relative; height: 320px;">
+            <canvas id="typeBreakdownChart"></canvas>
+        </div>
     </div>
     
     {% if client_labels %}
     <div class="chart-section">
         <div class="chart-header">Top Clients by Profit (Last 30 Days)</div>
-        <canvas id="topClientsChart" style="max-height: 320px;"></canvas>
+        <div style="position: relative; height: 320px;">
+            <canvas id="topClientsChart"></canvas>
+        </div>
     </div>
     {% endif %}
 </div>
@@ -265,18 +403,24 @@
 <!-- Weekly Report Section -->
     <div class="chart-section">
     <div class="chart-header">Weekly Trends (Last 4 Weeks)</div>
-    <canvas id="weeklyTrendsChart" style="max-height: 400px;"></canvas>
+    <div style="position: relative; height: 400px;">
+        <canvas id="weeklyTrendsChart"></canvas>
+    </div>
 </div>
 
 <div class="charts-grid">
     <div class="chart-section">
         <div class="chart-header">Transaction Type Breakdown</div>
-        <canvas id="typeBreakdownChart" style="max-height: 320px;"></canvas>
+        <div style="position: relative; height: 320px;">
+            <canvas id="typeBreakdownChart"></canvas>
+        </div>
     </div>
     
     <div class="chart-section">
         <div class="chart-header">Daily Trends (Last 30 Days)</div>
-        <canvas id="dailyTrendsChart" style="max-height: 320px;"></canvas>
+        <div style="position: relative; height: 320px;">
+            <canvas id="dailyTrendsChart"></canvas>
+        </div>
     </div>
 </div>
 
@@ -284,18 +428,24 @@
 <!-- Monthly Report Section -->
     <div class="chart-section">
     <div class="chart-header">Monthly Trends (Last 6 Months)</div>
-    <canvas id="monthlyTrendsChart" style="max-height: 400px;"></canvas>
+    <div style="position: relative; height: 400px;">
+        <canvas id="monthlyTrendsChart"></canvas>
+    </div>
 </div>
 
 <div class="charts-grid">
     <div class="chart-section">
         <div class="chart-header">Transaction Type Breakdown</div>
-        <canvas id="typeBreakdownChart" style="max-height: 320px;"></canvas>
+        <div style="position: relative; height: 320px;">
+            <canvas id="typeBreakdownChart"></canvas>
+        </div>
     </div>
     
     <div class="chart-section">
         <div class="chart-header">Weekly Trends (Last 4 Weeks)</div>
-        <canvas id="weeklyTrendsChart" style="max-height: 320px;"></canvas>
+        <div style="position: relative; height: 320px;">
+            <canvas id="weeklyTrendsChart"></canvas>
+        </div>
     </div>
 </div>
 {% endif %}
@@ -318,6 +468,7 @@ function changeReportType(type, event) {
     const dateParam = url.searchParams.get('date');
     const clientType = url.searchParams.get('client_type');
     const clientId = url.searchParams.get('client');
+    const exchangeId = url.searchParams.get('exchange');
     const month = url.searchParams.get('month');
     
     url.searchParams.set('report_type', type);
@@ -326,11 +477,44 @@ function changeReportType(type, event) {
     if (dateParam) url.searchParams.set('date', dateParam);
     if (clientType) url.searchParams.set('client_type', clientType);
     if (clientId) url.searchParams.set('client', clientId);
+    if (exchangeId) url.searchParams.set('exchange', exchangeId);
     if (month) url.searchParams.set('month', month);
     
     sessionStorage.setItem('reportScrollPosition', currentScrollY);
     window.location.href = url.toString();
     return false;
+}
+
+function openClientDropdown() {
+    document.getElementById('dropdownOverlay').classList.add('active');
+    document.getElementById('clientDropdown').classList.add('active');
+}
+
+function openExchangeDropdown() {
+    document.getElementById('dropdownOverlay').classList.add('active');
+    document.getElementById('exchangeDropdown').classList.add('active');
+}
+
+function closeDropdowns() {
+    document.getElementById('dropdownOverlay').classList.remove('active');
+    document.getElementById('clientDropdown').classList.remove('active');
+    document.getElementById('exchangeDropdown').classList.remove('active');
+}
+
+function selectClient(clientId, displayText) {
+    document.getElementById('clientSelect').value = clientId;
+    document.getElementById('clientDisplay').textContent = displayText;
+    closeDropdowns();
+    // Auto-filter immediately
+    changeClient(clientId);
+}
+
+function selectExchange(exchangeId, displayText) {
+    document.getElementById('exchangeSelect').value = exchangeId;
+    document.getElementById('exchangeDisplay').textContent = displayText;
+    closeDropdowns();
+    // Auto-filter immediately
+    changeExchange(exchangeId);
 }
 
 function changeClient(clientId) {
@@ -343,6 +527,7 @@ function changeClient(clientId) {
     const reportType = url.searchParams.get('report_type') || 'monthly';
     const clientType = url.searchParams.get('client_type');
     const month = url.searchParams.get('month');
+    const exchangeId = url.searchParams.get('exchange');
     
     url.searchParams.set('report_type', reportType);
     if (startDate) url.searchParams.set('start_date', startDate);
@@ -350,6 +535,7 @@ function changeClient(clientId) {
     if (dateParam) url.searchParams.set('date', dateParam);
     if (clientType) url.searchParams.set('client_type', clientType);
     if (month) url.searchParams.set('month', month);
+    if (exchangeId) url.searchParams.set('exchange', exchangeId);
     if (clientId) {
         url.searchParams.set('client', clientId);
     } else {
@@ -359,6 +545,42 @@ function changeClient(clientId) {
     sessionStorage.setItem('reportScrollPosition', currentScrollY);
     window.location.href = url.toString();
 }
+
+function changeExchange(exchangeId) {
+    const currentScrollY = window.scrollY || window.pageYOffset;
+    const url = new URL(window.location);
+    
+    const startDate = url.searchParams.get('start_date');
+    const endDate = url.searchParams.get('end_date');
+    const dateParam = url.searchParams.get('date');
+    const reportType = url.searchParams.get('report_type') || 'monthly';
+    const clientType = url.searchParams.get('client_type');
+    const month = url.searchParams.get('month');
+    const clientId = url.searchParams.get('client');
+    
+    url.searchParams.set('report_type', reportType);
+    if (startDate) url.searchParams.set('start_date', startDate);
+    if (endDate) url.searchParams.set('end_date', endDate);
+    if (dateParam) url.searchParams.set('date', dateParam);
+    if (clientType) url.searchParams.set('client_type', clientType);
+    if (month) url.searchParams.set('month', month);
+    if (clientId) url.searchParams.set('client', clientId);
+    if (exchangeId) {
+        url.searchParams.set('exchange', exchangeId);
+    } else {
+        url.searchParams.delete('exchange');
+    }
+    
+    sessionStorage.setItem('reportScrollPosition', currentScrollY);
+    window.location.href = url.toString();
+}
+
+// Close dropdown on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeDropdowns();
+    }
+});
 
 function changeMonth(monthValue) {
     const currentScrollY = window.scrollY || window.pageYOffset;
@@ -370,6 +592,7 @@ function changeMonth(monthValue) {
     const reportType = url.searchParams.get('report_type') || 'monthly';
     const clientType = url.searchParams.get('client_type');
     const clientId = url.searchParams.get('client');
+    const exchangeId = url.searchParams.get('exchange');
     
     url.searchParams.set('report_type', reportType);
     // Remove time travel params when selecting month
@@ -378,6 +601,7 @@ function changeMonth(monthValue) {
     url.searchParams.delete('date');
     if (clientType) url.searchParams.set('client_type', clientType);
     if (clientId) url.searchParams.set('client', clientId);
+    if (exchangeId) url.searchParams.set('exchange', exchangeId);
     if (monthValue) {
         url.searchParams.set('month', monthValue);
     } else {
@@ -410,14 +634,14 @@ function changeMonth(monthValue) {
 // Initialize all charts
 function initializeCharts() {
     if (typeof Chart === 'undefined') {
+        console.warn('Chart.js not loaded yet, retrying...');
         setTimeout(initializeCharts, 100);
         return;
     }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializeCharts);
-        return;
-    }
+    
+    console.log('Initializing charts...');
+    console.log('Report type:', '{{ report_type }}');
+    console.log('Chart.js version:', typeof Chart !== 'undefined' ? Chart.version : 'NOT LOADED');
 
     // Basic color palette
     const colors = {
@@ -436,16 +660,26 @@ function initializeCharts() {
 // Daily Trends Chart
 {% if report_type == 'daily' or report_type == 'weekly' %}
 const dailyChartEl = document.getElementById('dailyTrendsChart');
+console.log('Daily chart element found:', dailyChartEl !== null);
 if (dailyChartEl) {
-    const dailyCtx = dailyChartEl.getContext('2d');
-    new Chart(dailyCtx, {
-    type: 'line',
-            data: {
-                labels: {{ daily_labels|safe }},
-                datasets: [
-                    {
-                        label: 'Profit',
-                        data: {{ daily_profit|safe }},
+    try {
+        const dailyCtx = dailyChartEl.getContext('2d');
+        const dailyLabels = {{ daily_labels|safe }} || [];
+        const dailyProfit = {{ daily_profit|safe }} || [];
+        const dailyLoss = {{ daily_loss|safe }} || [];
+        const dailyTurnover = {{ daily_turnover|safe }} || [];
+        
+        console.log('Daily chart data:', { labels: dailyLabels, profit: dailyProfit, loss: dailyLoss, turnover: dailyTurnover });
+        console.log('Creating daily chart...');
+        
+        const dailyChart = new Chart(dailyCtx, {
+        type: 'line',
+                data: {
+                    labels: dailyLabels,
+                    datasets: [
+                        {
+                            label: 'Profit',
+                            data: dailyProfit,
                         borderColor: colors.profit,
                         backgroundColor: colors.background.profit,
                 tension: 0.4,
@@ -454,20 +688,20 @@ if (dailyChartEl) {
                         pointRadius: 4,
                         pointHoverRadius: 6
             },
-                    {
-                        label: 'Loss',
-                        data: {{ daily_loss|safe }},
-                        borderColor: colors.loss,
-                        backgroundColor: colors.background.loss,
-                tension: 0.4,
-                fill: true,
-                        borderWidth: 3,
-                        pointRadius: 4,
-                        pointHoverRadius: 6
-            },
-                    {
-                        label: 'Turnover',
-                        data: {{ daily_turnover|safe }},
+                        {
+                            label: 'Loss',
+                            data: dailyLoss,
+                            borderColor: colors.loss,
+                            backgroundColor: colors.background.loss,
+                    tension: 0.4,
+                    fill: true,
+                            borderWidth: 3,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                },
+                        {
+                            label: 'Turnover',
+                            data: dailyTurnover,
                         borderColor: colors.turnover,
                         backgroundColor: colors.background.turnover,
                 tension: 0.4,
@@ -481,7 +715,7 @@ if (dailyChartEl) {
     },
     options: {
         responsive: true,
-        maintainAspectRatio: true,
+        maintainAspectRatio: false,
         plugins: {
             legend: {
                 position: 'top',
@@ -534,40 +768,56 @@ if (dailyChartEl) {
                 }
             }
         });
+        console.log('Daily chart created successfully:', dailyChart);
+    } catch (error) {
+        console.error('Error initializing daily chart:', error);
+        console.error('Error details:', error.message, error.stack);
     }
+} else {
+    console.warn('Daily chart element not found!');
+}
 {% endif %}
 
 // Weekly Trends Chart
 {% if report_type == 'weekly' or report_type == 'monthly' %}
 const weeklyChartEl = document.getElementById('weeklyTrendsChart');
+console.log('Weekly chart element found:', weeklyChartEl !== null);
 if (weeklyChartEl) {
-    const weeklyCtx = weeklyChartEl.getContext('2d');
-    new Chart(weeklyCtx, {
-    type: 'bar',
-            data: {
-                labels: {{ weekly_labels|safe }},
-                datasets: [
-                    {
-                        label: 'Profit',
-                        data: {{ weekly_profit|safe }},
-                        backgroundColor: colors.profit + 'CC',
-                        borderColor: colors.profit,
-                        borderWidth: 2,
-                        borderRadius: 6
-            },
-                    {
-                        label: 'Loss',
-                        data: {{ weekly_loss|safe }},
-                        backgroundColor: colors.loss + 'CC',
-                        borderColor: colors.loss,
-                        borderWidth: 2,
-                        borderRadius: 6
-            }
-        ]
-    },
+    try {
+        const weeklyCtx = weeklyChartEl.getContext('2d');
+        const weeklyLabels = {{ weekly_labels|safe }} || [];
+        const weeklyProfit = {{ weekly_profit|safe }} || [];
+        const weeklyLoss = {{ weekly_loss|safe }} || [];
+        
+        console.log('Weekly chart data:', { labels: weeklyLabels, profit: weeklyProfit, loss: weeklyLoss });
+        console.log('Creating weekly chart...');
+        
+        const weeklyChart = new Chart(weeklyCtx, {
+        type: 'bar',
+                data: {
+                    labels: weeklyLabels,
+                    datasets: [
+                        {
+                            label: 'Profit',
+                            data: weeklyProfit,
+                            backgroundColor: colors.profit + 'CC',
+                            borderColor: colors.profit,
+                            borderWidth: 2,
+                            borderRadius: 6
+                },
+                        {
+                            label: 'Loss',
+                            data: weeklyLoss,
+                            backgroundColor: colors.loss + 'CC',
+                            borderColor: colors.loss,
+                            borderWidth: 2,
+                            borderRadius: 6
+                }
+            ]
+        },
     options: {
         responsive: true,
-        maintainAspectRatio: true,
+        maintainAspectRatio: false,
         plugins: {
             legend: {
                 position: 'top',
@@ -605,31 +855,45 @@ if (weeklyChartEl) {
                 }
             }
         });
+        console.log('Weekly chart created successfully:', weeklyChart);
+    } catch (error) {
+        console.error('Error initializing weekly chart:', error);
+        console.error('Error details:', error.message, error.stack);
     }
+} else {
+    console.warn('Weekly chart element not found!');
+}
 {% endif %}
 
 // Transaction Type Breakdown Chart
 {% if report_type == 'daily' or report_type == 'weekly' or report_type == 'monthly' %}
 const typeChartEl = document.getElementById('typeBreakdownChart');
+console.log('Type breakdown chart element found:', typeChartEl !== null);
 if (typeChartEl) {
-    const typeCtx = typeChartEl.getContext('2d');
-        const typeColors = {{ type_colors|safe }};
+    try {
+        const typeCtx = typeChartEl.getContext('2d');
+        const typeColors = {{ type_colors|safe }} || [];
+        const typeLabels = {{ type_labels|safe }} || [];
+        const typeAmounts = {{ type_amounts|safe }} || [];
+        
+        console.log('Type breakdown chart data:', { labels: typeLabels, amounts: typeAmounts });
+        
         // Update colors to modern palette
         const modernColors = typeColors.map((c, i) => {
-            const labels = {{ type_labels|safe }};
-            if (labels[i] === 'Profit') return colors.profit;
-            if (labels[i] === 'Loss') return colors.loss;
-            if (labels[i] === 'Funding') return colors.funding;
-            if (labels[i] === 'Settlement') return colors.settlement;
+            if (typeLabels[i] === 'Profit') return colors.profit;
+            if (typeLabels[i] === 'Loss') return colors.loss;
+            if (typeLabels[i] === 'Funding') return colors.funding;
+            if (typeLabels[i] === 'Settlement') return colors.settlement;
             return c;
         });
         
-        new Chart(typeCtx, {
+        console.log('Creating type breakdown chart...');
+        const typeChart = new Chart(typeCtx, {
             type: 'doughnut',
             data: {
-                labels: {{ type_labels|safe }},
+                labels: typeLabels,
                 datasets: [{
-                    data: {{ type_amounts|safe }},
+                    data: typeAmounts,
                     backgroundColor: modernColors,
             borderWidth: 3,
             borderColor: '#ffffff'
@@ -637,7 +901,7 @@ if (typeChartEl) {
     },
     options: {
         responsive: true,
-        maintainAspectRatio: true,
+        maintainAspectRatio: false,
         plugins: {
             legend: {
                 position: 'bottom',
@@ -663,30 +927,57 @@ if (typeChartEl) {
         }
     }
     });
+    console.log('Type breakdown chart created successfully:', typeChart);
+    } catch (error) {
+        console.error('Error initializing type breakdown chart:', error);
+        console.error('Error details:', error.message, error.stack);
+    }
+} else {
+    console.warn('Type breakdown chart element not found!');
 }
 {% endif %}
 
 // Monthly Trends Chart
 {% if report_type == 'monthly' %}
 const monthlyChartEl = document.getElementById('monthlyTrendsChart');
+console.log('Monthly chart element found:', monthlyChartEl !== null);
 if (monthlyChartEl) {
-    const monthlyCtx = monthlyChartEl.getContext('2d');
-    new Chart(monthlyCtx, {
-    type: 'bar',
-            data: {
-                labels: {{ monthly_labels|safe }},
-                datasets: [
-                    {
-                        label: 'Profit',
-                        data: {{ monthly_profit|safe }},
-                        backgroundColor: colors.profit + 'CC',
-                        borderColor: colors.profit,
-                        borderWidth: 2,
-                        borderRadius: 6
-            },
-                    {
-                        label: 'Loss',
-                        data: {{ monthly_loss|safe }},
+    try {
+        const monthlyCtx = monthlyChartEl.getContext('2d');
+        const monthlyLabels = {{ monthly_labels|safe }} || [];
+        const monthlyProfit = {{ monthly_profit|safe }} || [];
+        const monthlyLoss = {{ monthly_loss|safe }} || [];
+        
+        console.log('Monthly chart data:', { labels: monthlyLabels, profit: monthlyProfit, loss: monthlyLoss });
+        console.log('Monthly chart data types:', { 
+            labelsType: typeof monthlyLabels, 
+            profitType: typeof monthlyProfit, 
+            lossType: typeof monthlyLoss 
+        });
+        
+        // Ensure data is arrays
+        const labels = Array.isArray(monthlyLabels) ? monthlyLabels : [];
+        const profit = Array.isArray(monthlyProfit) ? monthlyProfit : [];
+        const loss = Array.isArray(monthlyLoss) ? monthlyLoss : [];
+        
+        console.log('Creating monthly chart with data:', { labels, profit, loss });
+        
+        const monthlyChart = new Chart(monthlyCtx, {
+        type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Profit',
+                            data: profit,
+                            backgroundColor: colors.profit + 'CC',
+                            borderColor: colors.profit,
+                            borderWidth: 2,
+                            borderRadius: 6
+                },
+                        {
+                            label: 'Loss',
+                            data: loss,
                         backgroundColor: colors.loss + 'CC',
                         borderColor: colors.loss,
                         borderWidth: 2,
@@ -696,7 +987,7 @@ if (monthlyChartEl) {
     },
     options: {
         responsive: true,
-        maintainAspectRatio: true,
+        maintainAspectRatio: false,
         plugins: {
             legend: {
                 position: 'top',
@@ -734,21 +1025,32 @@ if (monthlyChartEl) {
                 }
             }
         });
+        console.log('Monthly chart created successfully:', monthlyChart);
+    } catch (error) {
+        console.error('Error initializing monthly chart:', error);
+        console.error('Error details:', error.message, error.stack);
     }
+} else {
+    console.warn('Monthly chart element not found!');
+}
 {% endif %}
 
 {% if report_type == 'daily' and client_labels %}
 // Top Clients Chart
 const clientsChartEl = document.getElementById('topClientsChart');
 if (clientsChartEl) {
-    const clientsCtx = clientsChartEl.getContext('2d');
-    new Chart(clientsCtx, {
-    type: 'bar',
-            data: {
-                labels: {{ client_labels|safe }},
-                datasets: [{
-                    label: 'Profit',
-                    data: {{ client_profits|safe }},
+    try {
+        const clientsCtx = clientsChartEl.getContext('2d');
+        const clientLabels = {{ client_labels|safe }} || [];
+        const clientProfits = {{ client_profits|safe }} || [];
+        
+        new Chart(clientsCtx, {
+        type: 'bar',
+                data: {
+                    labels: clientLabels,
+                    datasets: [{
+                        label: 'Profit',
+                        data: clientProfits,
                     backgroundColor: colors.profit + 'CC',
                     borderColor: colors.profit,
                     borderWidth: 2,
@@ -757,7 +1059,7 @@ if (clientsChartEl) {
     },
     options: {
         responsive: true,
-        maintainAspectRatio: true,
+        maintainAspectRatio: false,
         indexAxis: 'y',
         plugins: {
                     legend: { display: false },
@@ -789,11 +1091,39 @@ if (clientsChartEl) {
         }
     }
     });
+    } catch (error) {
+        console.error('Error initializing top clients chart:', error);
+    }
 }
 {% endif %}
 }
 
-// Start chart initialization
-initializeCharts();
+// Start chart initialization - wait for Chart.js to load
+function startChartInitialization() {
+    if (typeof Chart !== 'undefined') {
+        console.log('Chart.js is available, initializing charts...');
+        initializeCharts();
+    } else {
+        console.warn('Chart.js not available yet, waiting...');
+        setTimeout(startChartInitialization, 100);
+    }
+}
+
+// Wait for DOM and Chart.js to be ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+        startChartInitialization();
+    });
+} else {
+    // DOM already loaded, start initialization
+    startChartInitialization();
+}
+
+// Fallback: also try on window load
+window.addEventListener('load', function() {
+    if (typeof Chart !== 'undefined' && typeof initializeCharts === 'function') {
+        initializeCharts();
+    }
+});
 </script>
 {% endblock %}
