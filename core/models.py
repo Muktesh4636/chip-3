@@ -185,10 +185,12 @@ class ClientExchangeAccount(TimeStampedModel):
     exchange_balance = models.BigIntegerField(default=0, validators=[MinValueValidator(0)])
     
     # Partner percentage (INT as per spec) - kept for backward compatibility
-    my_percentage = models.IntegerField(
+    my_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
         default=0,
         validators=[MinValueValidator(0), MaxValueValidator(100)],
-        help_text="Your total percentage share (0-100) - DEPRECATED: Use loss_share_percentage and profit_share_percentage"
+        help_text="Your total percentage share (0-100, decimals allowed) - DEPRECATED: Use loss_share_percentage and profit_share_percentage"
     )
     
     # MASKED SHARE SETTLEMENT SYSTEM: Separate loss and profit percentages
@@ -621,15 +623,19 @@ class ClientExchangeReportConfig(TimeStampedModel):
     )
     
     # Report-only percentages (INT as per spec)
-    friend_percentage = models.IntegerField(
+    friend_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
         default=0,
         validators=[MinValueValidator(0)],
-        help_text="Friend/Student percentage (report only)"
+        help_text="Friend/Student percentage (report only, decimals allowed)"
     )
-    my_own_percentage = models.IntegerField(
+    my_own_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
         default=0,
         validators=[MinValueValidator(0)],
-        help_text="Your own percentage (report only)"
+        help_text="Your own percentage (report only, decimals allowed)"
     )
     
     class Meta:
@@ -644,10 +650,12 @@ class ClientExchangeReportConfig(TimeStampedModel):
         from django.core.exceptions import ValidationError
         
         if self.client_exchange:
-            my_total = self.client_exchange.my_percentage
-            friend_plus_own = self.friend_percentage + self.my_own_percentage
+            my_total = float(self.client_exchange.my_percentage)
+            friend_plus_own = float(self.friend_percentage) + float(self.my_own_percentage)
             
-            if friend_plus_own != my_total:
+            # Use epsilon for floating point comparison
+            epsilon = 0.01
+            if abs(friend_plus_own - my_total) >= epsilon:
                 raise ValidationError(
                     f"Friend % ({self.friend_percentage}) + My Own % ({self.my_own_percentage}) "
                     f"must equal My Total % ({my_total})"
@@ -659,7 +667,7 @@ class ClientExchangeReportConfig(TimeStampedModel):
         Friend_Share = ABS(Client_PnL) × friend_percentage / 100
         """
         client_pnl = abs(self.client_exchange.compute_client_pnl())
-        return (client_pnl * self.friend_percentage) // 100
+        return int((client_pnl * float(self.friend_percentage)) / 100)
     
     def compute_my_own_share(self):
         """
@@ -667,7 +675,7 @@ class ClientExchangeReportConfig(TimeStampedModel):
         My_Own_Share = ABS(Client_PnL) × my_own_percentage / 100
         """
         client_pnl = abs(self.client_exchange.compute_client_pnl())
-        return (client_pnl * self.my_own_percentage) // 100
+        return int((client_pnl * float(self.my_own_percentage)) / 100)
 
 
 class Settlement(TimeStampedModel):

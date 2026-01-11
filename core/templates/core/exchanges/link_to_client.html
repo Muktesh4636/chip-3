@@ -39,9 +39,9 @@
         
         <div class="form-row">
             <label class="field-label">My Total % *</label>
-            <input type="number" name="my_percentage" id="my_percentage" class="field-input" min="0" max="100" required>
+            <input type="number" name="my_percentage" id="my_percentage" class="field-input" min="0" max="100" step="0.01" required>
             <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">
-                Your total percentage share (0-100)
+                Your total percentage share (0-100, decimals allowed)
             </div>
         </div>
         
@@ -56,17 +56,17 @@
             
             <div class="form-row">
                 <label class="field-label">Company % (Report Only)</label>
-                <input type="number" name="friend_percentage" id="friend_percentage" class="field-input" min="0" max="100" value="0" placeholder="0">
+                <input type="number" name="friend_percentage" id="friend_percentage" class="field-input" min="0" max="100" step="0.01" value="0" placeholder="0">
                 <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">
-                    Company percentage (report only)
+                    Company percentage (report only, decimals allowed)
                 </div>
             </div>
             
             <div class="form-row">
                 <label class="field-label">My Own % (Report Only)</label>
-                <input type="number" name="my_own_percentage" id="my_own_percentage" class="field-input" min="0" max="100" value="0" placeholder="0">
+                <input type="number" name="my_own_percentage" id="my_own_percentage" class="field-input" min="0" max="100" step="0.01" value="0" placeholder="0">
                 <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">
-                    Your own percentage (report only)
+                    Your own percentage (report only, decimals allowed)
                 </div>
             </div>
         </div>
@@ -83,21 +83,30 @@
             function updateValidation() {
                 if (isUpdating) return;
                 
-                const myTotal = parseInt(myTotalInput.value) || 0;
-                const friend = parseInt(friendInput.value) || 0;
-                const myOwn = parseInt(myOwnInput.value) || 0;
+                const myTotal = parseFloat(myTotalInput.value) || 0;
+                const friend = parseFloat(friendInput.value) || 0;
+                const myOwn = parseFloat(myOwnInput.value) || 0;
                 const sum = friend + myOwn;
                 
-                // Update validation message
-                if (myTotal === 0) {
+                // Update validation message (round to 2 decimal places for display)
+                const myTotalDisplay = myTotal.toFixed(2);
+                const friendDisplay = friend.toFixed(2);
+                const myOwnDisplay = myOwn.toFixed(2);
+                const sumDisplay = sum.toFixed(2);
+                const diffDisplay = Math.abs(sum - myTotal).toFixed(2);
+                
+                // Use small epsilon for floating point comparison
+                const epsilon = 0.01;
+                
+                if (Math.abs(myTotal) < epsilon) {
                     summaryDiv.style.color = '#64748b';
-                    summaryDiv.innerHTML = `Current: Company % (${friend}) + My Own % (${myOwn}) = <strong>${sum}</strong> | My Total %: <strong>0</strong>`;
-                } else if (sum === myTotal) {
+                    summaryDiv.innerHTML = `Current: Company % (${friendDisplay}) + My Own % (${myOwnDisplay}) = <strong>${sumDisplay}</strong> | My Total %: <strong>0</strong>`;
+                } else if (Math.abs(sum - myTotal) < epsilon) {
                     summaryDiv.style.color = '#16a34a';
-                    summaryDiv.innerHTML = `✅ Valid: Company % (${friend}) + My Own % (${myOwn}) = <strong>${sum}</strong> | My Total %: <strong>${myTotal}</strong>`;
+                    summaryDiv.innerHTML = `✅ Valid: Company % (${friendDisplay}) + My Own % (${myOwnDisplay}) = <strong>${sumDisplay}</strong> | My Total %: <strong>${myTotalDisplay}</strong>`;
                 } else {
                     summaryDiv.style.color = '#dc2626';
-                    summaryDiv.innerHTML = `❌ Invalid: Company % (${friend}) + My Own % (${myOwn}) = <strong>${sum}</strong> | My Total %: <strong>${myTotal}</strong> (Difference: ${Math.abs(sum - myTotal)})`;
+                    summaryDiv.innerHTML = `❌ Invalid: Company % (${friendDisplay}) + My Own % (${myOwnDisplay}) = <strong>${sumDisplay}</strong> | My Total %: <strong>${myTotalDisplay}</strong> (Difference: ${diffDisplay})`;
                 }
             }
             
@@ -106,21 +115,21 @@
                 if (isUpdating) return;
                 isUpdating = true;
                 
-                const myTotal = parseInt(myTotalInput.value) || 0;
-                const friend = parseInt(friendInput.value) || 0;
+                const myTotal = parseFloat(myTotalInput.value) || 0;
+                const friend = parseFloat(friendInput.value) || 0;
                 
                 if (myTotal > 0) {
                     // Ensure Company % doesn't exceed My Total %
                     if (friend > myTotal) {
-                        friendInput.value = myTotal;
-                        myOwnInput.value = 0;
+                        friendInput.value = myTotal.toFixed(2);
+                        myOwnInput.value = '0.00';
                     } else {
                         // Calculate My Own % = My Total % - Company %
                         const calculatedMyOwn = myTotal - friend;
-                        myOwnInput.value = Math.max(0, Math.min(100, calculatedMyOwn));
+                        myOwnInput.value = Math.max(0, Math.min(100, calculatedMyOwn)).toFixed(2);
                     }
                 } else {
-                    myOwnInput.value = 0;
+                    myOwnInput.value = '0.00';
                 }
                 
                 isUpdating = false;
@@ -132,21 +141,21 @@
                 if (isUpdating) return;
                 isUpdating = true;
                 
-                const myTotal = parseInt(myTotalInput.value) || 0;
-                const myOwn = parseInt(myOwnInput.value) || 0;
+                const myTotal = parseFloat(myTotalInput.value) || 0;
+                const myOwn = parseFloat(myOwnInput.value) || 0;
                 
                 if (myTotal > 0) {
                     // Ensure My Own % doesn't exceed My Total %
                     if (myOwn > myTotal) {
-                        myOwnInput.value = myTotal;
-                        friendInput.value = 0;
+                        myOwnInput.value = myTotal.toFixed(2);
+                        friendInput.value = '0.00';
                     } else {
                         // Calculate Company % = My Total % - My Own %
                         const calculatedFriend = myTotal - myOwn;
-                        friendInput.value = Math.max(0, Math.min(100, calculatedFriend));
+                        friendInput.value = Math.max(0, Math.min(100, calculatedFriend)).toFixed(2);
                     }
                 } else {
-                    friendInput.value = 0;
+                    friendInput.value = '0.00';
                 }
                 
                 isUpdating = false;
@@ -158,27 +167,27 @@
                 if (isUpdating) return;
                 isUpdating = true;
                 
-                const myTotal = parseInt(myTotalInput.value) || 0;
-                const friend = parseInt(friendInput.value) || 0;
-                const myOwn = parseInt(myOwnInput.value) || 0;
+                const myTotal = parseFloat(myTotalInput.value) || 0;
+                const friend = parseFloat(friendInput.value) || 0;
+                const myOwn = parseFloat(myOwnInput.value) || 0;
                 
                 if (myTotal > 0) {
                     // If Friend % is set, keep it and calculate My Own %
                     if (friend > 0 && friend <= myTotal) {
-                        myOwnInput.value = myTotal - friend;
+                        myOwnInput.value = (myTotal - friend).toFixed(2);
                     }
                     // If My Own % is set, keep it and calculate Friend %
                     else if (myOwn > 0 && myOwn <= myTotal) {
-                        friendInput.value = myTotal - myOwn;
+                        friendInput.value = (myTotal - myOwn).toFixed(2);
                     }
                     // If neither is set or both are 0, set Friend % to 0 and My Own % to My Total %
                     else {
-                        friendInput.value = 0;
-                        myOwnInput.value = myTotal;
+                        friendInput.value = '0.00';
+                        myOwnInput.value = myTotal.toFixed(2);
                     }
                 } else {
-                    friendInput.value = 0;
-                    myOwnInput.value = 0;
+                    friendInput.value = '0.00';
+                    myOwnInput.value = '0.00';
                 }
                 
                 isUpdating = false;
@@ -202,14 +211,17 @@
             
             // Form submission validation
             document.querySelector('form').addEventListener('submit', function(e) {
-                const myTotal = parseInt(myTotalInput.value) || 0;
-                const friend = parseInt(friendInput.value) || 0;
-                const myOwn = parseInt(myOwnInput.value) || 0;
+                const myTotal = parseFloat(myTotalInput.value) || 0;
+                const friend = parseFloat(friendInput.value) || 0;
+                const myOwn = parseFloat(myOwnInput.value) || 0;
                 const sum = friend + myOwn;
                 
-                if (myTotal > 0 && sum !== myTotal) {
+                // Use epsilon for floating point comparison
+                const epsilon = 0.01;
+                
+                if (myTotal > 0 && Math.abs(sum - myTotal) >= epsilon) {
                     e.preventDefault();
-                    alert(`Validation Error: Company % (${friend}) + My Own % (${myOwn}) = ${sum}, but My Total % = ${myTotal}.\n\nPlease ensure Company % + My Own % equals My Total %.`);
+                    alert(`Validation Error: Company % (${friend.toFixed(2)}) + My Own % (${myOwn.toFixed(2)}) = ${sum.toFixed(2)}, but My Total % = ${myTotal.toFixed(2)}.\n\nPlease ensure Company % + My Own % equals My Total %.`);
                     return false;
                 }
             });

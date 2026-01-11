@@ -3985,10 +3985,10 @@ def link_client_to_exchange(request):
         try:
             client = Client.objects.get(pk=client_id, user=request.user)
             exchange = Exchange.objects.get(pk=exchange_id)
-            my_percentage_int = int(my_percentage)
+            my_percentage_float = float(my_percentage)
             
             # Validate percentage range
-            if my_percentage_int < 0 or my_percentage_int > 100:
+            if my_percentage_float < 0 or my_percentage_float > 100:
                 from django.contrib import messages
                 messages.error(request, "My Total % must be between 0 and 100.")
                 return render(request, "core/exchanges/link_to_client.html", {
@@ -4013,23 +4013,24 @@ def link_client_to_exchange(request):
                 exchange=exchange,
                 funding=0,
                 exchange_balance=0,
-                my_percentage=my_percentage_int,
-                loss_share_percentage=my_percentage_int,  # Default to my_percentage
-                profit_share_percentage=my_percentage_int,  # Default to my_percentage (can change anytime)
+                my_percentage=my_percentage_float,
+                loss_share_percentage=my_percentage_float,  # Default to my_percentage
+                profit_share_percentage=my_percentage_float,  # Default to my_percentage (can change anytime)
             )
             
             # Create report config if friend/own percentages provided
             if friend_percentage or my_own_percentage:
-                friend_pct = int(friend_percentage) if friend_percentage else 0
-                own_pct = int(my_own_percentage) if my_own_percentage else 0
+                friend_pct = float(friend_percentage) if friend_percentage else 0.0
+                own_pct = float(my_own_percentage) if my_own_percentage else 0.0
                 
-                # Validate: friend % + my own % = my total %
-                if friend_pct + own_pct != my_percentage_int:
+                # Validate: friend % + my own % = my total % (with epsilon for floating point comparison)
+                epsilon = 0.01
+                if abs(friend_pct + own_pct - my_percentage_float) >= epsilon:
                     from django.contrib import messages
                     messages.warning(
                         request,
-                        f"Company % ({friend_pct}) + My Own % ({own_pct}) = {friend_pct + own_pct}, "
-                        f"but My Total % = {my_percentage_int}. Report config not created."
+                        f"Company % ({friend_pct:.2f}) + My Own % ({own_pct:.2f}) = {friend_pct + own_pct:.2f}, "
+                        f"but My Total % = {my_percentage_float:.2f}. Report config not created."
                     )
                 else:
                     ClientExchangeReportConfig.objects.create(
