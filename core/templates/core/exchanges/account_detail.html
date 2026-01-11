@@ -9,7 +9,6 @@
 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
     <a href="{% url 'add_funding' account.pk %}" class="btn btn-primary">Add Funding</a>
     <a href="{% url 'update_balance' account.pk %}" class="btn btn-primary">Update Balance</a>
-    <a href="{% url 'client_exchange_edit' account.pk %}" class="btn btn-primary" style="background: #3b82f6; border: 2px solid #2563eb; font-weight: 600;">✏️ Edit Percentages</a>
     <a href="{% url 'client_detail' account.client.pk %}" class="btn">Back to Client</a>
 </div>
 {% endblock %}
@@ -63,9 +62,6 @@
                 {{ account.my_percentage }}%
             {% endif %}
         </div>
-        <div style="margin-top: 8px;">
-            <a href="{% url 'client_exchange_edit' account.pk %}" style="font-size: 12px; color: #3b82f6; text-decoration: none; font-weight: 600;">✏️ Edit</a>
-        </div>
     </div>
 </div>
 
@@ -73,7 +69,6 @@
 <div style="background: var(--bg-content); border-radius: 8px; padding: 24px; border: 1px solid var(--border); margin-bottom: 24px;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
         <h3 style="font-size: 18px; font-weight: 600; margin: 0;">Account Information</h3>
-        <a href="{% url 'client_exchange_edit' account.pk %}" class="btn btn-primary" style="background: #3b82f6; border: 2px solid #2563eb; font-weight: 600; padding: 8px 16px;">✏️ Edit Percentages</a>
     </div>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
         <div>
