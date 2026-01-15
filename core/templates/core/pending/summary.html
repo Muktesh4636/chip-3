@@ -56,7 +56,7 @@
 
 <!-- Clients Owe You Section -->
 <div id="section-clients-owe" class="section-content">
-    <div style="background: var(--bg-content); border-radius: 8px; padding: 24px; border: 1px solid var(--border); margin-bottom: 24px;">
+    <div style="background: var(--bg-content); border-radius: 8px; padding: 24px; border: 1px solid var(--border); margin-bottom: 24px; overflow-x: visible;">
         <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">Clients Owe You</h3>
         <p style="color: var(--muted); margin-bottom: 16px;">
             These clients are in LOSS. They owe you settlement amounts.
@@ -64,8 +64,8 @@
         </p>
         
         {% if clients_owe_you %}
-        <div class="table-wrapper">
-            <table>
+        <div class="table-wrapper" style="overflow-x: auto; overflow-y: visible; width: 100%; -webkit-overflow-scrolling: touch;">
+            <table style="min-width: max-content; width: 100%;">
             <thead>
             <tr>
                 <th>Client</th>
@@ -134,7 +134,7 @@
 
 <!-- You Owe Clients Section -->
 <div id="section-you-owe" class="section-content" style="display: none;">
-    <div style="background: var(--bg-content); border-radius: 8px; padding: 24px; border: 1px solid var(--border); margin-bottom: 24px;">
+    <div style="background: var(--bg-content); border-radius: 8px; padding: 24px; border: 1px solid var(--border); margin-bottom: 24px; overflow-x: visible;">
         <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">You Owe Clients</h3>
         <p style="color: var(--muted); margin-bottom: 16px;">
             These clients are in PROFIT. You owe them settlement amounts.
@@ -142,8 +142,8 @@
         </p>
         
         {% if you_owe_clients %}
-        <div class="table-wrapper">
-            <table>
+        <div class="table-wrapper" style="overflow-x: auto; overflow-y: visible; width: 100%; -webkit-overflow-scrolling: touch;">
+            <table style="min-width: max-content; width: 100%;">
             <thead>
             <tr>
                 <th>Client</th>

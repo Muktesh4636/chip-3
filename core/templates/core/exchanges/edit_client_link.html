@@ -9,35 +9,22 @@
     <form method="post">
         {% csrf_token %}
         <div class="form-row">
-            <label class="field-label">Exchange 
-                {% if can_edit_exchange %}
-                    <span style="color: var(--success); font-weight: normal;">(Editable - Created {{ days_since_creation }} day{{ days_since_creation|pluralize }} ago)</span>
-                {% else %}
-                    <span style="color: var(--muted); font-weight: normal;">(Cannot be changed)</span>
-                {% endif %}
-            </label>
-            {% if can_edit_exchange %}
-                <select name="exchange" class="field-input" required>
-                    {% for exchange in exchanges %}
-                        <option value="{{ exchange.pk }}" {% if exchange.pk == client_exchange.exchange.pk %}selected{% endif %}>
-                            {{ exchange.name }}{% if exchange.code %} ({{ exchange.code }}){% endif %}
-                        </option>
-                    {% endfor %}
-                </select>
-                <div style="font-size: 12px; color: var(--success); margin-top: 4px;">
-                    You can change the exchange within 10 days of creation. {{ days_remaining }} day{{ days_remaining|pluralize }} remaining.
-                </div>
-            {% else %}
-                <input type="text" class="field-input" value="{{ client_exchange.exchange.name }}{% if client_exchange.exchange.code %} ({{ client_exchange.exchange.code }}){% endif %}" disabled style="background-color: #f3f4f6; color: #6b7280; cursor: not-allowed; opacity: 0.7;">
-                <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
-                    Exchange cannot be modified after 10 days from creation. To change the exchange, delete this link and create a new one.
-                </div>
-            {% endif %}
+            <label class="field-label">Exchange</label>
+            <select name="exchange" class="field-input" required>
+                {% for exchange in exchanges %}
+                    <option value="{{ exchange.pk }}" {% if exchange.pk == client_exchange.exchange.pk %}selected{% endif %}>
+                        {{ exchange.name }}{% if exchange.code %} ({{ exchange.code }}){% endif %}
+                    </option>
+                {% endfor %}
+            </select>
+            <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">
+                You can change the exchange at any time.
+            </div>
         </div>
         
         <div class="form-row">
             <label class="field-label">My Total Percentage *</label>
-            <input type="number" name="my_percentage" id="my-percentage-input" class="field-input" min="0" max="100" step="0.01" value="{{ client_exchange.my_percentage }}" required>
+            <input type="number" name="my_percentage" id="my_percentage" class="field-input" min="0" max="100" step="0.01" value="{{ client_exchange.my_percentage }}" required>
             <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Your total percentage share (0-100, decimals allowed). This will be used for both loss and profit calculations.</div>
         </div>
         
@@ -45,15 +32,23 @@
         <div style="border-top: 1px solid var(--border); margin: 20px 0; padding-top: 20px;">
             <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">Report Configuration (Optional)</h4>
             
+            <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px; padding: 12px; margin-bottom: 16px;">
+                <div style="font-size: 13px; color: #075985; font-weight: 600; margin-bottom: 4px;">⚠️ Validation Rule:</div>
+                <div style="font-size: 13px; color: #075985;">Company % + My Own % <strong>must equal</strong> My Total %</div>
+                <div id="percentage-summary" style="font-size: 13px; color: #0c4a6e; margin-top: 8px; font-weight: 600;">
+                    Current: Company % (<span id="friend-display">{{ report_config.friend_percentage|default:0 }}</span>) + My Own % (<span id="myown-display">{{ report_config.my_own_percentage|default:0 }}</span>) = <span id="current-sum">0</span> | My Total %: <span id="my-total-display">{{ client_exchange.my_percentage|default:0 }}</span>
+                </div>
+            </div>
+            
             <div class="form-row">
                 <label class="field-label">Company Percentage</label>
-                <input type="number" name="friend_percentage" class="field-input" min="0" max="100" step="0.01" value="{{ report_config.friend_percentage }}">
+                <input type="number" name="friend_percentage" id="friend_percentage" class="field-input" min="0" max="100" step="0.01" value="{{ report_config.friend_percentage }}">
                 <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Company percentage (report only, decimals allowed). Must sum with "My Own %" to equal "My Total %".</div>
             </div>
             
             <div class="form-row">
                 <label class="field-label">My Own Percentage</label>
-                <input type="number" name="my_own_percentage" class="field-input" min="0" max="100" step="0.01" value="{{ report_config.my_own_percentage }}">
+                <input type="number" name="my_own_percentage" id="my_own_percentage" class="field-input" min="0" max="100" step="0.01" value="{{ report_config.my_own_percentage }}">
                 <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Your own percentage (report only, decimals allowed). Company % + My Own % = My Total %.</div>
             </div>
         </div>
@@ -67,60 +62,287 @@
 </div>
 
 <script>
-{% if client_type == 'company' %}
-function validateCompanyShare() {
-    const companyShareInput = document.getElementById('company-share-input');
-    if (!companyShareInput) return;
+document.addEventListener('DOMContentLoaded', function() {
+    {% if report_config %}
+    const myTotalInput = document.getElementById('my_percentage');
+    const friendInput = document.getElementById('friend_percentage');
+    const myOwnInput = document.getElementById('my_own_percentage');
+    const summaryDiv = document.getElementById('percentage-summary');
     
-    const companyShare = parseFloat(companyShareInput.value) || 0;
-    const messageDiv = document.getElementById('validation-message');
-    const submitBtn = document.getElementById('submit-btn');
+    if (!myTotalInput || !friendInput || !myOwnInput || !summaryDiv) return;
     
-    if (companyShare >= 100) {
-        messageDiv.textContent = 'Company share must be less than 100%';
-        messageDiv.style.display = 'block';
-        submitBtn.disabled = true;
-        submitBtn.style.opacity = '0.5';
-    } else {
-        messageDiv.style.display = 'none';
-        submitBtn.disabled = false;
-        submitBtn.style.opacity = '1';
-    }
-}
-
-function updateExample() {
-    const myShareInput = document.getElementById('my-share-input');
-    const companyShareInput = document.getElementById('company-share-input');
-    const exampleDiv = document.getElementById('example-calculation');
+    let isUpdating = false; // Prevent infinite loops
     
-    if (!myShareInput || !companyShareInput || !exampleDiv) return;
-    
-    const myShare = parseFloat(myShareInput.value) || 0;
-    const companyShare = parseFloat(companyShareInput.value) || 0;
-    
-    if (myShare > 0 && companyShare > 0 && companyShare < 100 && myShare < 100) {
-        const exampleProfit = 1000;
-        const yourProfit = (exampleProfit * myShare) / 100;
-        const clientShare = exampleProfit - yourProfit;
-        const companyGets = (clientShare * companyShare) / 100;
-        const clientKeeps = clientShare - companyGets;
+    function updateValidation() {
+        if (isUpdating) return;
         
-        exampleDiv.innerHTML = `Example: If profit is ₹${exampleProfit}, you get ₹${yourProfit.toFixed(2)} (${myShare}%), client gets ₹${clientShare.toFixed(2)} (${100-myShare}%), company gets ₹${companyGets.toFixed(2)} (${companyShare}% of client's ${100-myShare}%), client keeps ₹${clientKeeps.toFixed(2)}`;
-        exampleDiv.style.display = 'block';
-    } else {
-        exampleDiv.style.display = 'none';
+        const myTotal = parseFloat(myTotalInput.value) || 0;
+        const friend = parseFloat(friendInput.value) || 0;
+        const myOwn = parseFloat(myOwnInput.value) || 0;
+        const sum = friend + myOwn;
+        
+        // Update validation message (round to 2 decimal places for display)
+        const myTotalDisplay = myTotal.toFixed(2);
+        const friendDisplay = friend.toFixed(2);
+        const myOwnDisplay = myOwn.toFixed(2);
+        const sumDisplay = sum.toFixed(2);
+        const diffDisplay = Math.abs(sum - myTotal).toFixed(2);
+        
+        // Use small epsilon for floating point comparison
+        const epsilon = 0.01;
+        
+        if (Math.abs(myTotal) < epsilon) {
+            summaryDiv.style.color = '#64748b';
+            summaryDiv.innerHTML = `Current: Company % (${friendDisplay}) + My Own % (${myOwnDisplay}) = <strong>${sumDisplay}</strong> | My Total %: <strong>0</strong>`;
+        } else if (Math.abs(sum - myTotal) < epsilon) {
+            summaryDiv.style.color = '#16a34a';
+            summaryDiv.innerHTML = `✅ Valid: Company % (${friendDisplay}) + My Own % (${myOwnDisplay}) = <strong>${sumDisplay}</strong> | My Total %: <strong>${myTotalDisplay}</strong>`;
+        } else {
+            summaryDiv.style.color = '#dc2626';
+            summaryDiv.innerHTML = `❌ Invalid: Company % (${friendDisplay}) + My Own % (${myOwnDisplay}) = <strong>${sumDisplay}</strong> | My Total %: <strong>${myTotalDisplay}</strong> (Difference: ${diffDisplay})`;
+        }
     }
-}
-
-// Update example when my share changes too
-const myShareInput = document.getElementById('my-share-input');
-if (myShareInput) {
-    myShareInput.addEventListener('input', function() {
-        validateCompanyShare();
-        updateExample();
+    
+    // Auto-calculate My Own % when My Total % or Company % changes
+    function autoCalculateMyOwn() {
+        if (isUpdating) return;
+        isUpdating = true;
+        
+        const myTotal = parseFloat(myTotalInput.value) || 0;
+        const friend = parseFloat(friendInput.value) || 0;
+        
+        if (myTotal > 0) {
+            // Ensure Company % doesn't exceed My Total %
+            if (friend > myTotal) {
+                friendInput.value = myTotal.toFixed(2);
+                myOwnInput.value = '0.00';
+            } else {
+                // Calculate My Own % = My Total % - Company %
+                const calculatedMyOwn = myTotal - friend;
+                myOwnInput.value = Math.max(0, Math.min(100, calculatedMyOwn)).toFixed(2);
+            }
+        } else {
+            myOwnInput.value = '0.00';
+        }
+        
+        isUpdating = false;
+        updateValidation();
+    }
+    
+    // Auto-calculate Company % when My Total % or My Own % changes
+    function autoCalculateFriend() {
+        if (isUpdating) return;
+        isUpdating = true;
+        
+        const myTotal = parseFloat(myTotalInput.value) || 0;
+        const myOwn = parseFloat(myOwnInput.value) || 0;
+        
+        if (myTotal > 0) {
+            // Ensure My Own % doesn't exceed My Total %
+            if (myOwn > myTotal) {
+                myOwnInput.value = myTotal.toFixed(2);
+                friendInput.value = '0.00';
+            } else {
+                // Calculate Company % = My Total % - My Own %
+                const calculatedFriend = myTotal - myOwn;
+                friendInput.value = Math.max(0, Math.min(100, calculatedFriend)).toFixed(2);
+            }
+        } else {
+            friendInput.value = '0.00';
+        }
+        
+        isUpdating = false;
+        updateValidation();
+    }
+    
+    // Track if user is manually editing Friend % or My Own % fields
+    let isEditingFriend = false;
+    let isEditingMyOwn = false;
+    
+    friendInput.addEventListener('focus', function() {
+        isEditingFriend = true;
     });
-}
-{% endif %}
+    
+    friendInput.addEventListener('blur', function() {
+        isEditingFriend = false;
+    });
+    
+    myOwnInput.addEventListener('focus', function() {
+        isEditingMyOwn = true;
+    });
+    
+    myOwnInput.addEventListener('blur', function() {
+        isEditingMyOwn = false;
+    });
+    
+    // When My Total % changes, auto-fill Friend % and My Own % to sum to My Total %
+    myTotalInput.addEventListener('input', function() {
+        if (isUpdating) return;
+        isUpdating = true;
+        
+        const myTotal = parseFloat(myTotalInput.value) || 0;
+        const friend = parseFloat(friendInput.value) || 0;
+        const myOwn = parseFloat(myOwnInput.value) || 0;
+        const currentSum = friend + myOwn;
+        const epsilon = 0.01;
+        
+        if (myTotal > 0) {
+            // If user is currently editing Friend %, keep it and calculate My Own %
+            if (isEditingFriend && friend > 0 && friend <= myTotal) {
+                myOwnInput.value = (myTotal - friend).toFixed(2);
+            }
+            // If user is currently editing My Own %, keep it and calculate Friend %
+            else if (isEditingMyOwn && myOwn > 0 && myOwn <= myTotal) {
+                friendInput.value = (myTotal - myOwn).toFixed(2);
+            }
+            // If both fields already have values and they sum correctly, keep them
+            else if (Math.abs(currentSum - myTotal) < epsilon && friend > 0 && myOwn > 0) {
+                // Values already match, no change needed
+            }
+            // If Friend % is set and valid, keep it and calculate My Own %
+            else if (friend > 0 && friend <= myTotal) {
+                myOwnInput.value = (myTotal - friend).toFixed(2);
+            }
+            // If My Own % is set and valid, keep it and calculate Friend %
+            else if (myOwn > 0 && myOwn <= myTotal) {
+                friendInput.value = (myTotal - myOwn).toFixed(2);
+            }
+            // When My Total % is entered/changed, auto-fill both fields
+            // Default: Friend % = 0, My Own % = My Total %
+            else {
+                friendInput.value = '0.00';
+                myOwnInput.value = myTotal.toFixed(2);
+            }
+        } else {
+            friendInput.value = '0.00';
+            myOwnInput.value = '0.00';
+        }
+        
+        isUpdating = false;
+        updateValidation();
+    });
+    
+    // Also trigger auto-fill when My Total % field loses focus (user finishes typing)
+    myTotalInput.addEventListener('blur', function() {
+        if (isUpdating) return;
+        const myTotal = parseFloat(myTotalInput.value) || 0;
+        const friend = parseFloat(friendInput.value) || 0;
+        const myOwn = parseFloat(myOwnInput.value) || 0;
+        
+        if (myTotal > 0) {
+            // Ensure both fields sum to My Total %
+            const currentSum = friend + myOwn;
+            const epsilon = 0.01;
+            
+            // If sum doesn't match My Total %, auto-fill
+            if (Math.abs(currentSum - myTotal) >= epsilon) {
+                isUpdating = true;
+                // If Friend % is set, keep it and calculate My Own %
+                if (friend > 0 && friend <= myTotal) {
+                    myOwnInput.value = (myTotal - friend).toFixed(2);
+                }
+                // If My Own % is set, keep it and calculate Friend %
+                else if (myOwn > 0 && myOwn <= myTotal) {
+                    friendInput.value = (myTotal - myOwn).toFixed(2);
+                }
+                // Default: Friend % = 0, My Own % = My Total %
+                else {
+                    friendInput.value = '0.00';
+                    myOwnInput.value = myTotal.toFixed(2);
+                }
+                isUpdating = false;
+                updateValidation();
+            }
+        }
+    });
+    
+    // When Company % changes, auto-calculate My Own % to ensure sum equals My Total %
+    friendInput.addEventListener('input', function() {
+        if (isUpdating) return;
+        autoCalculateMyOwn();
+    });
+    
+    // When My Own % changes, auto-calculate Company % to ensure sum equals My Total %
+    myOwnInput.addEventListener('input', function() {
+        if (isUpdating) return;
+        autoCalculateFriend();
+    });
+    
+    // Initial validation
+    updateValidation();
+    
+    // Form submission validation
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const myTotal = parseFloat(myTotalInput.value) || 0;
+        const friend = parseFloat(friendInput.value) || 0;
+        const myOwn = parseFloat(myOwnInput.value) || 0;
+        const sum = friend + myOwn;
+        
+        // Use epsilon for floating point comparison
+        const epsilon = 0.01;
+        
+        if (myTotal > 0 && Math.abs(sum - myTotal) >= epsilon) {
+            e.preventDefault();
+            alert(`Invalid percentages: Company % (${friend.toFixed(2)}) + My Own % (${myOwn.toFixed(2)}) = ${sum.toFixed(2)}, but My Total % = ${myTotal.toFixed(2)}. They must be equal.`);
+            return false;
+        }
+    });
+    {% endif %}
+    
+    {% if client_type == 'company' %}
+    function validateCompanyShare() {
+        const companyShareInput = document.getElementById('company-share-input');
+        if (!companyShareInput) return;
+        
+        const companyShare = parseFloat(companyShareInput.value) || 0;
+        const messageDiv = document.getElementById('validation-message');
+        const submitBtn = document.getElementById('submit-btn');
+        
+        if (companyShare >= 100) {
+            messageDiv.textContent = 'Company share must be less than 100%';
+            messageDiv.style.display = 'block';
+            submitBtn.disabled = true;
+            submitBtn.style.opacity = '0.5';
+        } else {
+            messageDiv.style.display = 'none';
+            submitBtn.disabled = false;
+            submitBtn.style.opacity = '1';
+        }
+    }
+
+    function updateExample() {
+        const myShareInput = document.getElementById('my-share-input');
+        const companyShareInput = document.getElementById('company-share-input');
+        const exampleDiv = document.getElementById('example-calculation');
+        
+        if (!myShareInput || !companyShareInput || !exampleDiv) return;
+        
+        const myShare = parseFloat(myShareInput.value) || 0;
+        const companyShare = parseFloat(companyShareInput.value) || 0;
+        
+        if (myShare > 0 && companyShare > 0 && companyShare < 100 && myShare < 100) {
+            const exampleProfit = 1000;
+            const yourProfit = (exampleProfit * myShare) / 100;
+            const clientShare = exampleProfit - yourProfit;
+            const companyGets = (clientShare * companyShare) / 100;
+            const clientKeeps = clientShare - companyGets;
+            
+            exampleDiv.innerHTML = `Example: If profit is ₹${exampleProfit}, you get ₹${yourProfit.toFixed(2)} (${myShare}%), client gets ₹${clientShare.toFixed(2)} (${100-myShare}%), company gets ₹${companyGets.toFixed(2)} (${companyShare}% of client's ${100-myShare}%), client keeps ₹${clientKeeps.toFixed(2)}`;
+            exampleDiv.style.display = 'block';
+        } else {
+            exampleDiv.style.display = 'none';
+        }
+    }
+
+    // Update example when my share changes too
+    const myShareInput = document.getElementById('my-share-input');
+    if (myShareInput) {
+        myShareInput.addEventListener('input', function() {
+            validateCompanyShare();
+            updateExample();
+        });
+    }
+    {% endif %}
+});
 </script>
 {% endblock %}
-

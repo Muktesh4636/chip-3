@@ -27,9 +27,10 @@ class ExchangeForm(forms.ModelForm):
     """Form for creating/editing exchanges"""
     class Meta:
         model = Exchange
-        fields = ['name', 'code']
+        fields = ['name', 'version_name', 'code']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'field-input'}),
+            'version_name': forms.TextInput(attrs={'class': 'field-input'}),
             'code': forms.TextInput(attrs={'class': 'field-input'}),
         }
 
@@ -75,13 +76,24 @@ class ClientExchangeLinkForm(forms.ModelForm):
         friend_percentage = cleaned_data.get('friend_percentage', 0) or Decimal('0')
         my_own_percentage = cleaned_data.get('my_own_percentage', 0) or Decimal('0')
         
-        # Convert to Decimal for precise comparison
+        # Convert to Decimal for precise comparison and ensure they're stored as Decimal
         if isinstance(my_percentage, (int, float)):
             my_percentage = Decimal(str(my_percentage))
+        elif not isinstance(my_percentage, Decimal):
+            my_percentage = Decimal(str(my_percentage))
+        cleaned_data['my_percentage'] = my_percentage
+        
         if isinstance(friend_percentage, (int, float)):
             friend_percentage = Decimal(str(friend_percentage))
+        elif not isinstance(friend_percentage, Decimal):
+            friend_percentage = Decimal(str(friend_percentage))
+        cleaned_data['friend_percentage'] = friend_percentage
+        
         if isinstance(my_own_percentage, (int, float)):
             my_own_percentage = Decimal(str(my_own_percentage))
+        elif not isinstance(my_own_percentage, Decimal):
+            my_own_percentage = Decimal(str(my_own_percentage))
+        cleaned_data['my_own_percentage'] = my_own_percentage
         
         # Validation Rule: Friend % + My Own % = My Total % (with epsilon for floating point comparison)
         epsilon = Decimal('0.01')
@@ -99,8 +111,26 @@ class ClientExchangeLinkForm(forms.ModelForm):
         
         # Save report config if percentages provided
         if commit:
-            friend_pct = self.cleaned_data.get('friend_percentage', 0)
-            my_own_pct = self.cleaned_data.get('my_own_percentage', 0)
+            # Get values from cleaned_data (should already be Decimal from clean() method)
+            friend_pct_raw = self.cleaned_data.get('friend_percentage')
+            my_own_pct_raw = self.cleaned_data.get('my_own_percentage')
+            
+            # Ensure values are Decimal, not int or None
+            if friend_pct_raw is None:
+                friend_pct = Decimal('0')
+            elif isinstance(friend_pct_raw, Decimal):
+                friend_pct = friend_pct_raw
+            else:
+                # Convert string/int/float to Decimal, preserving decimal precision
+                friend_pct = Decimal(str(friend_pct_raw))
+                
+            if my_own_pct_raw is None:
+                my_own_pct = Decimal('0')
+            elif isinstance(my_own_pct_raw, Decimal):
+                my_own_pct = my_own_pct_raw
+            else:
+                # Convert string/int/float to Decimal, preserving decimal precision
+                my_own_pct = Decimal(str(my_own_pct_raw))
             
             if friend_pct > 0 or my_own_pct > 0:
                 ClientExchangeReportConfig.objects.update_or_create(

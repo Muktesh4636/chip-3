@@ -6,6 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     {% block extra_head %}{% endblock %}
     <style>
+        html {
+            zoom: 0.9;
+            -moz-transform: scale(0.9);
+            -moz-transform-origin: 0 0;
+        }
+        
         :root {
             --bg: #f1f5f9;
             --bg-content: #ffffff;
@@ -30,7 +36,7 @@
             color: var(--text);
             display: flex;
             min-height: 100vh;
-            font-size: 18px;
+            font-size: 13px;
         }
 
         .layout {
@@ -75,16 +81,16 @@
         .brand-text-main {
             font-weight: 700;
             letter-spacing: 0.02em;
-            font-size: 20px;
+            font-size: 15px;
         }
 
         .brand-text-sub {
-            font-size: 11px;
+            font-size: 9px;
             color: var(--muted);
         }
 
         .nav-section-label {
-            font-size: 15px;
+            font-size: 11px;
             color: var(--muted);
             text-transform: uppercase;
             letter-spacing: 0.08em;
@@ -115,7 +121,7 @@
             border-radius: 8px;
             color: #e5e7eb;
             text-decoration: none;
-            font-size: 18px;
+            font-size: 13px;
             font-weight: 500;
             transition: background 0.12s ease, color 0.12s ease;
         }
@@ -132,12 +138,12 @@
         .nav-icon {
             width: 20px;
             text-align: center;
-            font-size: 18px;
+            font-size: 13px;
         }
 
         .sidebar-footer {
             margin-top: auto;
-            font-size: 11px;
+            font-size: 9px;
             color: var(--muted);
         }
 
@@ -261,7 +267,8 @@
             flex: 1;
             margin-left: 280px;
             padding: 18px 22px;
-            overflow-x: hidden;
+            overflow-x: visible;
+            overflow-y: auto;
             transition: margin-left 0.2s ease;
         }
 
@@ -277,12 +284,12 @@
         }
 
         .page-title {
-            font-size: 24px;
+            font-size: 18px;
             font-weight: 600;
         }
 
         .page-subtitle {
-            font-size: 16px;
+            font-size: 12px;
             color: var(--muted);
         }
 
@@ -301,13 +308,13 @@
         }
 
         .card-title {
-            font-size: 18px;
+            font-size: 13px;
             color: var(--muted);
             margin-bottom: 10px;
         }
 
         .card-value {
-            font-size: 28px;
+            font-size: 20px;
             font-weight: 600;
         }
 
@@ -332,16 +339,16 @@
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 17px;
+            font-size: 12px;
         }
 
         th, td {
-            padding: 12px 12px;
+            padding: 8px 10px;
             text-align: left;
         }
 
         th {
-            font-size: 15px;
+            font-size: 11px;
             text-transform: uppercase;
             letter-spacing: 0.08em;
             color: var(--muted);
@@ -364,8 +371,32 @@
         .table-wrapper {
             border-radius: 8px;
             border: 1px solid var(--border);
-            overflow: hidden;
+            overflow-x: auto;
+            overflow-y: visible;
             background: var(--bg-content);
+            -webkit-overflow-scrolling: touch;
+            max-width: 100%;
+        }
+        
+        .table-wrapper table {
+            min-width: max-content;
+            width: 100%;
+        }
+        
+        .table-wrapper table td,
+        .table-wrapper table th {
+            white-space: nowrap;
+            padding: 8px 10px;
+            font-size: 12px;
+        }
+        
+        /* Ensure parent containers don't restrict scrolling */
+        .section-content {
+            overflow-x: visible !important;
+        }
+        
+        .main {
+            overflow-x: visible !important;
         }
 
         .table-header {
@@ -374,14 +405,14 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 14px;
+            font-size: 11px;
             color: var(--muted);
         }
 
         .badge {
             padding: 2px 7px;
             border-radius: 999px;
-            font-size: 11px;
+            font-size: 9px;
         }
 
         .badge-success {
@@ -398,12 +429,12 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            padding: 8px 14px;
+            padding: 7px 12px;
             border-radius: 999px;
             border: 1px solid var(--border);
             background: #ffffff;
             color: var(--text);
-            font-size: 14px;
+            font-size: 11px;
             text-decoration: none;
             cursor: pointer;
             transition: background 0.12s ease, border-color 0.12s ease;
@@ -425,26 +456,26 @@
         }
 
         .btn-sm {
-            padding: 6px 11px;
+            padding: 5px 10px;
             border-radius: 999px;
-            font-size: 13px;
+            font-size: 10px;
         }
 
         .field-label {
             display: block;
-            font-size: 14px;
+            font-size: 11px;
             color: var(--muted);
             margin-bottom: 6px;
         }
 
         .field-input {
             width: 100%;
-            padding: 10px 12px;
+            padding: 8px 10px;
             border-radius: 6px;
             border: 1px solid var(--border);
             background: #ffffff;
             color: var(--text);
-            font-size: 16px;
+            font-size: 12px;
         }
 
         .field-input:focus {
@@ -624,7 +655,7 @@
     <main class="main">
         <div class="page-header">
             <div style="display: flex; align-items: center; gap: 12px;">
-                <button type="button" class="btn btn-sm" onclick="toggleSidebar()" style="font-size: 18px; padding: 8px 12px;">
+                <button type="button" class="btn btn-sm" onclick="toggleSidebar()" style="font-size: 13px; padding: 8px 12px;">
                     ☰
                 </button>
                 <div>

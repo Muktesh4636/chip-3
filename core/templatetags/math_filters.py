@@ -137,3 +137,65 @@ def currency_inr(value):
         return ("-₹" if is_negative else "₹") + formatted
     except (ValueError, TypeError):
         return "₹0"
+
+
+@register.filter
+def currency_inr_decimal(value):
+    """
+    Format number as Indian Rupee currency with ₹ symbol, commas, and 2 decimal places.
+    Use this for profit/loss values that need decimal precision.
+    Example: 8.1 -> "₹8.10", 1234.56 -> "₹1,234.56"
+    """
+    if value is None:
+        return "₹0.00"
+    
+    try:
+        # Handle Decimal objects from database
+        if isinstance(value, Decimal):
+            num = float(value)
+        else:
+            num = float(value)
+        
+        # Round to 2 decimal places
+        num = round(num, 2)
+        
+        # Handle zero
+        if num == 0:
+            return "₹0.00"
+        
+        # Handle negative numbers
+        is_negative = num < 0
+        num_abs = abs(num)
+        
+        # Split into integer and decimal parts
+        integer_part = int(num_abs)
+        decimal_part = num_abs - integer_part
+        
+        # Format integer part with Indian number system commas
+        integer_str = str(integer_part)
+        
+        if len(integer_str) > 3:
+            # Get last 3 digits
+            last_three = integer_str[-3:]
+            # Get remaining digits
+            other_digits = integer_str[:-3]
+            
+            # Add commas every 2 digits for remaining numbers (Indian format)
+            reversed_other = other_digits[::-1]
+            formatted_other = ','.join(
+                reversed_other[i:i+2] for i in range(0, len(reversed_other), 2)
+            )[::-1]
+            formatted_integer = formatted_other + ',' + last_three
+        else:
+            formatted_integer = integer_str
+        
+        # Format decimal part (always 2 digits)
+        decimal_str = f"{decimal_part:.2f}".split('.')[1]
+        
+        # Combine
+        formatted = formatted_integer + '.' + decimal_str
+        
+        # Add currency symbol and negative sign
+        return ("-₹" if is_negative else "₹") + formatted
+    except (ValueError, TypeError):
+        return "₹0.00"

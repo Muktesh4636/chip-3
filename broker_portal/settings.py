@@ -18,10 +18,10 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 
 # SECURITY: Configure ALLOWED_HOSTS from environment variable
 # In production, set: ALLOWED_HOSTS=yourdomain.com,www.yourdomain.com
-# Defaults include localhost, the server IP and the domain `pravoo.in` to allow external access.
+# Defaults include localhost, the server IP and the domain `chip.pravoo.in` to allow external access.
 ALLOWED_HOSTS = config(
     'ALLOWED_HOSTS',
-    default='localhost,127.0.0.1,72.61.148.117,pravoo.in',
+    default='localhost,127.0.0.1,72.61.148.117,chip.pravoo.in,www.chip.pravoo.in',
     cast=Csv()
 )
 

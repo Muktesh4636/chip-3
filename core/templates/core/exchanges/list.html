@@ -18,6 +18,7 @@
         <thead>
         <tr>
             <th>Exchange Name</th>
+            <th>Version Name</th>
             <th>Code</th>
             <th>Status</th>
             <th>Actions</th>
@@ -27,6 +28,7 @@
         {% for exchange in exchanges %}
             <tr>
                 <td><strong>{{ exchange.name }}</strong></td>
+                <td>{% if exchange.version_name %}{{ exchange.version_name }}{% else %}-{% endif %}</td>
                 <td>{% if exchange.code %}{{ exchange.code }}{% else %}-{% endif %}</td>
                 <td>
                     <span class="badge badge-success">Active</span>
@@ -37,7 +39,7 @@
             </tr>
         {% empty %}
             <tr>
-                <td colspan="4">No exchanges created yet.</td>
+                <td colspan="5">No exchanges created yet.</td>
             </tr>
         {% endfor %}
         </tbody>

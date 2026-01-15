@@ -29,12 +29,16 @@
         
         <div class="form-row">
             <label class="field-label">Exchange *</label>
-            <select name="exchange" class="field-input" required>
+            <select name="exchange" id="exchange_select" class="field-input" required>
                 <option value="">-- Select Exchange --</option>
                 {% for exchange in exchanges %}
-                    <option value="{{ exchange.pk }}">{{ exchange.name }}{% if exchange.code %} ({{ exchange.code }}){% endif %}</option>
+                    <option value="{{ exchange.pk }}" data-name="{{ exchange.name }}" data-version="{{ exchange.version_name|default:'' }}" data-code="{{ exchange.code|default:'' }}">{{ exchange.name }}{% if exchange.version_name %} - {{ exchange.version_name }}{% endif %}{% if exchange.code %} ({{ exchange.code }}){% endif %}</option>
                 {% endfor %}
             </select>
+            <div id="exchange_version_display" style="font-size: 13px; color: #374151; margin-top: 8px; padding: 10px 14px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; display: none;">
+                <div style="margin-bottom: 6px;"><strong style="color: #111827;">Exchange:</strong> <span id="exchange_name_display" style="color: #1f2937;"></span></div>
+                <div><strong style="color: #111827;">Version:</strong> <span id="exchange_version_text" style="color: #1f2937;">-</span></div>
+            </div>
         </div>
         
         <div class="form-row">
@@ -73,10 +77,36 @@
         
         <script>
         document.addEventListener('DOMContentLoaded', function() {
+            const exchangeSelect = document.getElementById('exchange_select');
+            const exchangeVersionDisplay = document.getElementById('exchange_version_display');
+            const exchangeNameDisplay = document.getElementById('exchange_name_display');
+            const exchangeVersionText = document.getElementById('exchange_version_text');
             const myTotalInput = document.getElementById('my_percentage');
             const friendInput = document.getElementById('friend_percentage');
             const myOwnInput = document.getElementById('my_own_percentage');
             const summaryDiv = document.getElementById('percentage-summary');
+            
+            // Function to update exchange version display
+            function updateExchangeVersionDisplay() {
+                const selectedOption = exchangeSelect.options[exchangeSelect.selectedIndex];
+                if (selectedOption && selectedOption.value) {
+                    const exchangeName = selectedOption.getAttribute('data-name') || '';
+                    const exchangeVersion = selectedOption.getAttribute('data-version') || '';
+                    const exchangeCode = selectedOption.getAttribute('data-code') || '';
+                    
+                    exchangeNameDisplay.textContent = exchangeName + (exchangeCode ? ` (${exchangeCode})` : '');
+                    exchangeVersionText.textContent = exchangeVersion || 'Not specified';
+                    exchangeVersionDisplay.style.display = 'block';
+                } else {
+                    exchangeVersionDisplay.style.display = 'none';
+                }
+            }
+            
+            // Show exchange version when exchange is selected
+            exchangeSelect.addEventListener('change', updateExchangeVersionDisplay);
+            
+            // Also check on page load if an exchange is already selected
+            updateExchangeVersionDisplay();
             
             let isUpdating = false; // Prevent infinite loops
             

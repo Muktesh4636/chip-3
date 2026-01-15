@@ -126,6 +126,7 @@ class Exchange(TimeStampedModel):
     Exchange entity - trading platform.
     """
     name = models.CharField(max_length=200)
+    version_name = models.CharField(max_length=100, blank=True, null=True, help_text="Version or variant name of the exchange")
     code = models.CharField(max_length=50, blank=True, null=True, unique=True)
     
     class Meta:
