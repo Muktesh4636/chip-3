@@ -323,10 +323,10 @@ class ClientExchangeAccount(TimeStampedModel):
         
         # Use helper method to get appropriate share percentage
         share_pct = self.get_share_percentage(client_pnl)
-        
+
         # Exact Share (NO rounding)
-        exact_share = abs(client_pnl) * (share_pct / 100.0)
-        
+        exact_share = abs(client_pnl) * (share_pct / Decimal(100))
+
         # Final Share (ONLY rounding step) - FLOOR (round down)
         final_share = math.floor(exact_share)
         
@@ -345,10 +345,10 @@ class ClientExchangeAccount(TimeStampedModel):
         
         # Use helper method to get appropriate share percentage
         share_pct = self.get_share_percentage(client_pnl)
-        
+
         # Exact Share (NO rounding)
-        exact_share = abs(client_pnl) * (share_pct / 100.0)
-        
+        exact_share = abs(client_pnl) * (share_pct / Decimal(100))
+
         return exact_share
     
     def lock_initial_share_if_needed(self):

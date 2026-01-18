@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@color/bg_card">
+
+    <TextView
+        android:id="@+id/detType"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Transaction Audit Trail"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@color/text_main" />
+
+    <TextView
+        android:id="@+id/detSeq"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Transaction #123"
+        android:textSize="12sp"
+        android:textColor="@color/primary"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/detDate"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Jan 18, 2026 14:30:25"
+        android:textSize="14sp"
+        android:textColor="@color/text_muted"
+        android:layout_marginBottom="24dp" />
+
+    <!-- Amount Section -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="TRANSACTION AMOUNT"
+        android:textSize="10sp"
+        android:textColor="@color/text_muted"
+        android:layout_marginBottom="4dp" />
+    <TextView
+        android:id="@+id/detAmount"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="₹10,000"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@color/text_main"
+        android:layout_marginBottom="20dp" />
+
+    <!-- Account Info -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="ACCOUNT DETAILS"
+        android:textSize="10sp"
+        android:textColor="@color/text_muted"
+        android:layout_marginBottom="8dp" />
+    <TextView
+        android:id="@+id/detAccount"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="John Doe | Diamond Exchange"
+        android:textSize="14sp"
+        android:textColor="@color/text_main"
+        android:layout_marginBottom="20dp" />
+
+    <!-- Balance Changes -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="BALANCE CHANGES"
+        android:textSize="10sp"
+        android:textColor="@color/text_muted"
+        android:layout_marginBottom="8dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="16dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="FUNDING"
+                android:textSize="10sp"
+                android:textColor="@color/text_muted" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <TextView
+                    android:id="@+id/detFundingBefore"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="₹50,000"
+                    android:textSize="12sp"
+                    android:textColor="@color/text_muted" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=" → "
+                    android:textSize="12sp"
+                    android:textColor="@color/text_muted" />
+                <TextView
+                    android:id="@+id/detFundingAfter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="₹60,000"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_main" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="EXCHANGE BALANCE"
+                android:textSize="10sp"
+                android:textColor="@color/text_muted" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <TextView
+                    android:id="@+id/detBalanceBefore"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="₹45,000"
+                    android:textSize="12sp"
+                    android:textColor="@color/text_muted" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=" → "
+                    android:textSize="12sp"
+                    android:textColor="@color/text_muted" />
+                <TextView
+                    android:id="@+id/detBalanceAfter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="₹55,000"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_main" />
+            </LinearLayout>
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Notes Section -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="TRANSACTION NOTES"
+        android:textSize="10sp"
+        android:textColor="@color/text_muted"
+        android:layout_marginBottom="8dp" />
+    <TextView
+        android:id="@+id/detNotes"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="No notes available."
+        android:textSize="14sp"
+        android:textColor="@color/text_main"
+        android:background="@drawable/field_input_bg"
+        android:padding="12dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="24dp" />
+
+    <Button
+        android:id="@+id/btnClose"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Close" />
+
+</LinearLayout>

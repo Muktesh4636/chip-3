@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Core Website Palette -->
+    <color name="primary">#14B8A6</color>
+    <color name="primary_dark">#0F766E</color>
+    <color name="accent">#14B8A6</color>
+    <color name="accent_soft">#CCFBF1</color>
+    
+    <!-- UI Colors -->
+    <color name="bg_page">#F1F5F9</color>
+    <color name="bg_card">#FFFFFF</color>
+    <color name="bg_card_highlight">#F8FAFC</color>
+    <color name="sidebar_bg">#111827</color>
+    
+    <!-- Text Colors -->
+    <color name="text_main">#0F172A</color>
+    <color name="text_muted">#9CA3AF</color>
+    <color name="border">#E5E7EB</color>
+    
+    <!-- Status Colors -->
+    <color name="success">#16A34A</color>
+    <color name="danger">#DC2626</color>
+    <color name="warning">#F59E0B</color>
+    <color name="info">#06B6D4</color>
+    <color name="success_soft">#DCFCE7</color>
+    <color name="danger_soft">#FEE2E2</color>
+    
+    <!-- Misc -->
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="transparent">#00000000</color>
+</resources>

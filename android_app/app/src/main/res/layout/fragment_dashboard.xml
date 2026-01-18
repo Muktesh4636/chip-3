@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_page">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Dashboard"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_main" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Overview of your business"
+            android:textSize="14sp"
+            android:textColor="@color/text_muted"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Card Grid Emulation -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Card: Total Clients -->
+            <include layout="@layout/card_stat_item" 
+                android:id="@+id/cardClients" />
+
+            <!-- Card: Total Funding -->
+            <include layout="@layout/card_stat_item"
+                android:id="@+id/cardFunding" />
+
+            <!-- Card: Total Balance -->
+            <include layout="@layout/card_stat_item"
+                android:id="@+id/cardBalance" />
+
+            <!-- Card: Total PnL -->
+            <include layout="@layout/card_stat_item"
+                android:id="@+id/cardPnL" />
+
+            <!-- Card: My Share -->
+            <include layout="@layout/card_stat_item"
+                android:id="@+id/cardShare" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

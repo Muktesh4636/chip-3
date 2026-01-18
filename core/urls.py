@@ -2,9 +2,37 @@
 URL configuration for core app
 """
 from django.urls import path, include
-from . import views
+from rest_framework.routers import DefaultRouter
+from . import views, api_views
+
+# API Router
+router = DefaultRouter()
+router.register(r'api/clients', api_views.ClientViewSet, basename='api-client')
+router.register(r'api/exchanges', api_views.ExchangeViewSet, basename='api-exchange')
+router.register(r'api/accounts', api_views.ClientExchangeAccountViewSet, basename='api-account')
+router.register(r'api/transactions', api_views.TransactionViewSet, basename='api-transaction')
 
 urlpatterns = [
+    # API Routes
+    path('api/login/', api_views.api_login, name='api-login'),
+    path('api/mobile-dashboard/', api_views.mobile_dashboard_summary, name='api-mobile-dashboard'),
+    path('api/pending-payments/', api_views.api_pending_payments, name='api-pending-payments'),
+    path('api/accounts/<int:account_id>/funding/', api_views.api_add_funding, name='api-funding'),
+    path('api/accounts/<int:account_id>/balance/', api_views.api_update_balance, name='api-balance'),
+    path('api/accounts/<int:account_id>/payment/', api_views.api_record_payment, name='api-payment'),
+    path('api/accounts/link/', api_views.api_link_exchange, name='api-link-account'),
+    path('api/reports-summary/', api_views.api_reports_summary, name='api-reports-summary'),
+    path('api/exchanges/create/', api_views.api_create_exchange, name='api-create-exchange'),
+    path('api/transactions/<int:pk>/delete/', api_views.api_delete_transaction, name='api-delete-transaction'),
+    path('api/transactions/<int:pk>/edit/', api_views.api_edit_transaction, name='api-edit-transaction'),
+    path('api/exchanges/<int:pk>/delete/', api_views.api_delete_exchange, name='api-delete-exchange'),
+    path('api/accounts/<int:account_id>/settings/', api_views.api_update_account_settings, name='api-account-settings'),
+    path('api/accounts/<int:account_id>/report-config/', api_views.api_account_report_config, name='api-account-report-config'),
+    path('api/clients/<int:pk>/delete/', api_views.api_delete_client, name='api-client-delete-mobile'),
+    path('', include(router.urls)),
+    path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
+    path('api/token-auth/', include('rest_framework.urls')), # Simplified for token login later
+
     # Authentication
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
@@ -49,6 +77,7 @@ urlpatterns = [
     path('reports/weekly/', views.report_weekly, name='report_weekly'),
     path('reports/monthly/', views.report_monthly, name='report_monthly'),
     path('reports/custom/', views.report_custom, name='report_custom'),
+    path('api/reports/custom/', api_views.api_custom_reports, name='api-custom-reports'),
     path('reports/client/<int:pk>/', views.report_client, name='report_client'),
     path('reports/exchange/<int:pk>/', views.report_exchange, name='report_exchange'),
     path('reports/time-travel/', views.report_time_travel, name='report_time_travel'),

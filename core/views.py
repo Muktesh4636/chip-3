@@ -3344,16 +3344,58 @@ def transaction_edit(request, pk):
 
 @login_required
 @require_http_methods(["POST"])
+def transaction_delete_logic(transaction):
+    """Core logic to delete a transaction and revert balances, shared between web and API."""
+    from django.db import transaction as db_transaction
+    account = transaction.client_exchange
+    
+    with db_transaction.atomic():
+        # 1. Revert account balances to exactly what they were BEFORE this transaction
+        if transaction.funding_before is not None:
+            account.funding = transaction.funding_before
+        
+        if transaction.exchange_balance_before is not None:
+            account.exchange_balance = transaction.exchange_balance_before
+        
+        # Adjust balances for auto-refunding entries that may not track before/after values
+        if transaction.type == 'FUNDING_AUTO':
+            auto_amount = transaction.amount or 0
+            account.funding = max(0, account.funding - auto_amount)
+            account.exchange_balance = max(0, account.exchange_balance - auto_amount)
+        
+        # 2. Reset the PnL cycle. This is CRITICAL.
+        account.locked_initial_final_share = None
+        account.locked_share_percentage = None
+        account.locked_initial_pnl = None
+        account.cycle_start_date = None
+        account.locked_initial_funding = None
+        
+        # 3. Special case: If we're deleting a payment settlement, delete corresponding Settlement record
+        # Note: Settlement model must be imported or available
+        from .models import Settlement
+        if transaction.type in ['RECORD_PAYMENT', 'SETTLEMENT_SHARE']:
+            last_settlement = Settlement.objects.filter(client_exchange=account).order_by('-date', '-id').first()
+            if last_settlement:
+                if last_settlement.amount == abs(transaction.amount):
+                    last_settlement.delete()
+        
+        # 4. Save account changes
+        account.save()
+        
+        # 5. Delete the transaction record
+        transaction.delete()
+        
+        # 6. Force a fresh re-lock of the share based on the NEW reverted balances
+        account.lock_initial_share_if_needed()
+
 def transaction_delete(request, pk):
     """Delete only the latest transaction and revert account balances."""
     from django.contrib import messages
-    from django.db import transaction as db_transaction
     
     transaction = get_object_or_404(Transaction, pk=pk, client_exchange__client__user=request.user)
     account = transaction.client_exchange
     
     # Check if this is the latest transaction for this account
-    # Strict chronological ordering: newest first
     latest_tx = Transaction.objects.filter(client_exchange=account).order_by('-created_at', '-id').first()
     
     if not latest_tx or transaction.pk != latest_tx.pk:
@@ -3361,50 +3403,8 @@ def transaction_delete(request, pk):
         return redirect(reverse("exchange_account_detail", args=[account.pk]))
     
     try:
-        with db_transaction.atomic():
-            # 1. Revert account balances to exactly what they were BEFORE this transaction
-            if transaction.funding_before is not None:
-                account.funding = transaction.funding_before
-            
-            if transaction.exchange_balance_before is not None:
-                account.exchange_balance = transaction.exchange_balance_before
-            
-            # Adjust balances for auto-refunding entries that may not track before/after values
-            if transaction.type == 'FUNDING_AUTO':
-                auto_amount = transaction.amount or 0
-                account.funding = max(0, account.funding - auto_amount)
-                account.exchange_balance = max(0, account.exchange_balance - auto_amount)
-            
-            # 2. Reset the PnL cycle. This is CRITICAL.
-            # Deleting a transaction means the current share lock is potentially invalid.
-            # We clear it so the next calculation uses the reverted balances.
-            account.locked_initial_final_share = None
-            account.locked_share_percentage = None
-            account.locked_initial_pnl = None
-            account.cycle_start_date = None
-            account.locked_initial_funding = None
-            
-            # 3. Special case: If we're deleting a payment settlement, delete corresponding Settlement record
-            if transaction.type in ['RECORD_PAYMENT', 'SETTLEMENT_SHARE']:
-                # Find the most recent settlement for this account
-                last_settlement = Settlement.objects.filter(client_exchange=account).order_by('-date', '-id').first()
-                if last_settlement:
-                    # Verify amount matches (ignoring sign for transaction amount)
-                    if last_settlement.amount == abs(transaction.amount):
-                        last_settlement.delete()
-            
-            # 4. Save account changes
-            account.save()
-            
-            # 5. Delete the transaction record
-            transaction.delete()
-            
-            # 6. Force a fresh re-lock of the share based on the NEW reverted balances
-            # This ensures "My Share" is recalculated and saved IMMEDIATELY.
-            account.lock_initial_share_if_needed()
-            
-            messages.success(request, "Last transaction deleted. Balances and My Share have been recomputed successfully.")
-            
+        transaction_delete_logic(transaction)
+        messages.success(request, "Last transaction deleted. Balances and My Share have been recomputed successfully.")
     except Exception as e:
         messages.error(request, f"Error deleting transaction: {str(e)}")
         

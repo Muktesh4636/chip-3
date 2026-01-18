@@ -21,7 +21,7 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 # Defaults include localhost, the server IP and the domain `chip.pravoo.in` to allow external access.
 ALLOWED_HOSTS = config(
     'ALLOWED_HOSTS',
-    default='localhost,127.0.0.1,72.61.148.117,chip.pravoo.in,www.chip.pravoo.in',
+    default='localhost,127.0.0.1,72.61.148.117,chip.pravoo.in,www.chip.pravoo.in,10.13.171.64,*',
     cast=Csv()
 )
 
@@ -34,6 +34,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
+    'rest_framework.authtoken',
     # Local apps
     'core',
 ]
@@ -147,6 +149,17 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Custom User Model
 AUTH_USER_MODEL = 'core.CustomUser'
+
+# Django REST Framework Configuration
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+}
 
 # Authentication settings
 LOGIN_URL = '/login/'

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/table_row_selector"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:id="@+id/logTimestamp"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="2024-01-20 10:30:00"
+            android:textSize="12sp"
+            android:textColor="@color/text_muted" />
+
+        <TextView
+            android:id="@+id/logAction"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="LOGIN"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="@color/success"
+            android:background="@drawable/pill_label_bg"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="2dp" />
+
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/logDetails"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="User logged in successfully"
+        android:textSize="14sp"
+        android:textColor="@color/text_main"
+        android:layout_marginBottom="4dp" />
+
+    <TextView
+        android:id="@+id/logIP"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="IP: 192.168.1.1"
+        android:textSize="11sp"
+        android:textColor="@color/text_muted" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/border"
+        android:layout_marginTop="8dp" />
+
+</LinearLayout>

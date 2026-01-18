@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_page"
+    android:padding="24dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Add New Exchange"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textColor="@color/text_main"
+        android:layout_marginBottom="32dp" />
+
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="2dp"
+        app:cardBackgroundColor="@color/bg_card">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="24dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Exchange Name"
+                android:textSize="12sp"
+                android:textColor="@color/text_muted"
+                android:layout_marginBottom="6dp" />
+
+            <EditText
+                android:id="@+id/editExchangeName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="e.g. Exness"
+                android:inputType="text"
+                android:padding="12dp"
+                android:background="@drawable/field_input_bg"
+                android:textSize="15sp"
+                android:layout_marginBottom="16dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Version Name"
+                android:textSize="12sp"
+                android:textColor="@color/text_muted"
+                android:layout_marginBottom="6dp" />
+
+            <EditText
+                android:id="@+id/editExchangeVersion"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="e.g. v2 / Pro"
+                android:inputType="text"
+                android:padding="12dp"
+                android:background="@drawable/field_input_bg"
+                android:textSize="15sp"
+                android:layout_marginBottom="16dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Internal Code"
+                android:textSize="12sp"
+                android:textColor="@color/text_muted"
+                android:layout_marginBottom="6dp" />
+
+            <EditText
+                android:id="@+id/editExchangeCode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="e.g. EX01"
+                android:inputType="textCapCharacters"
+                android:padding="12dp"
+                android:background="@drawable/field_input_bg"
+                android:textSize="15sp"
+                android:layout_marginBottom="24dp" />
+
+            <Button
+                android:id="@+id/btnCreateExchange"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Save Exchange"
+                android:backgroundTint="@color/primary"
+                android:textColor="@color/white"
+                android:padding="14dp"
+                app:cornerRadius="8dp" />
+
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+</LinearLayout>
