@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_page"
+    android:padding="24dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/emailIntegrationTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Email Integration &amp; Sharing"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_main"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Send reports and share data via email"
+            android:textSize="14sp"
+            android:textColor="@color/text_muted"
+            android:layout_marginBottom="24dp" />
+
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="@color/bg_card"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="REPORTS &amp; ANALYTICS"
+                    android:textSize="10sp"
+                    android:textColor="@color/text_muted"
+                    android:layout_marginBottom="16dp" />
+
+                <Button
+                    android:id="@+id/btnEmailDailyReport"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="📊 Email Daily Report"
+                    android:textSize="14sp"
+                    android:backgroundTint="@color/success"
+                    android:textColor="@color/white"
+                    android:layout_marginBottom="12dp"
+                    app:cornerRadius="8dp" />
+
+                <Button
+                    android:id="@+id/btnEmailWeeklyReport"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="📈 Email Weekly Report"
+                    android:textSize="14sp"
+                    android:backgroundTint="@color/info"
+                    android:textColor="@color/white"
+                    android:layout_marginBottom="12dp"
+                    app:cornerRadius="8dp" />
+
+                <Button
+                    android:id="@+id/btnEmailCustomReport"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="📅 Email Custom Date Report"
+                    android:textSize="14sp"
+                    android:backgroundTint="@color/primary"
+                    android:textColor="@color/white"
+                    android:layout_marginBottom="12dp"
+                    app:cornerRadius="8dp" />
+
+                <Button
+                    android:id="@+id/btnEmailTransactionSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="💸 Email Transaction Summary"
+                    android:textSize="14sp"
+                    android:backgroundTint="@color/accent"
+                    android:textColor="@color/white"
+                    app:cornerRadius="8dp" />
+
+            </LinearLayout>
+
+        </androidx.cardview.widget.CardView>
+
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="@color/bg_card"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="CLIENT &amp; ACCOUNT REPORTS"
+                    android:textSize="10sp"
+                    android:textColor="@color/text_muted"
+                    android:layout_marginBottom="16dp" />
+
+                <Button
+                    android:id="@+id/btnEmailClientReport"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="👥 Email Client Performance Report"
+                    android:textSize="14sp"
+                    android:backgroundTint="@color/warning"
+                    android:textColor="@color/white"
+                    android:layout_marginBottom="12dp"
+                    app:cornerRadius="8dp" />
+
+                <Button
+                    android:id="@+id/btnEmailAccountStatement"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="🏦 Email Account Statement"
+                    android:textSize="14sp"
+                    android:backgroundTint="@color/danger"
+                    android:textColor="@color/white"
+                    app:cornerRadius="8dp" />
+
+            </LinearLayout>
+
+        </androidx.cardview.widget.CardView>
+
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="@color/bg_card"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="DATA &amp; SHARING"
+                    android:textSize="10sp"
+                    android:textColor="@color/text_muted"
+                    android:layout_marginBottom="16dp" />
+
+                <Button
+                    android:id="@+id/btnEmailDataExport"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="💾 Email Data Export (CSV)"
+                    android:textSize="14sp"
+                    android:backgroundTint="@color/sidebar_bg"
+                    android:textColor="@color/text_main"
+                    android:layout_marginBottom="12dp"
+                    app:cornerRadius="8dp" />
+
+                <Button
+                    android:id="@+id/btnShareApp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="📤 Share TransactionHub App"
+                    android:textSize="14sp"
+                    android:backgroundTint="@color/primary"
+                    android:textColor="@color/white"
+                    app:cornerRadius="8dp" />
+
+            </LinearLayout>
+
+        </androidx.cardview.widget.CardView>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📧 Emails will open in your default email app"
+            android:textSize="12sp"
+            android:textColor="@color/text_muted"
+            android:layout_marginTop="16dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🔒 Your data is processed locally and securely"
+            android:textSize="12sp"
+            android:textColor="@color/text_muted"
+            android:layout_marginTop="4dp" />
+
+    </LinearLayout>
+
+</ScrollView>

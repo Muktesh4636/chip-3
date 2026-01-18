@@ -9,15 +9,15 @@
         android:icon="@android:drawable/ic_menu_myplaces"
         android:title="Clients" />
     <item
-        android:id="@+id/nav_payments"
-        android:icon="@android:drawable/ic_menu_send"
-        android:title="Payments" />
+        android:id="@+id/nav_exchanges"
+        android:icon="@android:drawable/ic_menu_directions"
+        android:title="Exchanges" />
     <item
-        android:id="@+id/nav_transactions"
-        android:icon="@android:drawable/ic_menu_recent_history"
-        android:title="History" />
+        android:id="@+id/nav_reports"
+        android:icon="@android:drawable/ic_menu_agenda"
+        android:title="Reports" />
     <item
-        android:id="@+id/nav_more"
-        android:icon="@android:drawable/ic_menu_more"
-        android:title="More" />
+        android:id="@+id/nav_settings"
+        android:icon="@android:drawable/ic_menu_preferences"
+        android:title="Settings" />
 </menu>

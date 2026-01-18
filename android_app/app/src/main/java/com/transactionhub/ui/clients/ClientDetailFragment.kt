@@ -14,7 +14,7 @@ import com.transactionhub.data.api.ApiService
 import com.transactionhub.data.models.Account
 import com.transactionhub.utils.ApiClient
 import com.transactionhub.utils.PrefManager
-import com.transactionhub.ui.accounts.AccountDetailFragment
+import com.transactionhub.ui.accounts.ExchangeAccountDetailFragment
 import com.transactionhub.ui.accounts.LinkAccountFragment
 import kotlinx.coroutines.launch
 
@@ -87,7 +87,7 @@ class ClientDetailFragment : Fragment() {
         recyclerView = view.findViewById(R.id.accountsRecyclerView)
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         adapter = AccountsAdapter(emptyList()) { acc ->
-            val detailFragment = AccountDetailFragment.newInstance(acc.id, "${acc.client_name} | ${acc.exchange_name}")
+            val detailFragment = ExchangeAccountDetailFragment.newInstance(acc.id, acc.client_name, acc.exchange_name)
             parentFragmentManager.beginTransaction()
                 .replace(R.id.fragmentContainer, detailFragment)
                 .addToBackStack(null)
@@ -193,28 +193,65 @@ class ClientDetailFragment : Fragment() {
     }
 
     private fun loadAccounts() {
-        val token = prefManager.getToken() ?: return
-        
+        val token = prefManager.getToken()
+        android.util.Log.d("ClientDetailFragment", "Token available: ${token != null}")
+
+        if (token == null) {
+            Toast.makeText(context, "Please login again - authentication token missing", Toast.LENGTH_LONG).show()
+            return
+        }
+
         lifecycleScope.launch {
             try {
-                val response = apiService.getAccounts(ApiClient.getAuthToken(token))
+                val authHeader = ApiClient.getAuthToken(token)
+                android.util.Log.d("ClientDetailFragment", "Auth header: $authHeader")
+
+                val response = apiService.getAccounts(authHeader)
+                android.util.Log.d("ClientDetailFragment", "Response code: ${response.code()}")
+
                 if (response.isSuccessful) {
                     // Filter accounts for this client
                     val allAccounts = response.body() ?: emptyList()
+                    android.util.Log.d("ClientDetailFragment", "All accounts received: ${allAccounts.size}, clientId: $clientId")
+
                     val filteredAccounts = allAccounts.filter { it.client == clientId }
+                    android.util.Log.d("ClientDetailFragment", "Filtered accounts for client $clientId: ${filteredAccounts.size}")
+
                     adapter.updateAccounts(filteredAccounts)
 
                     // Calculate Summary
                     val totalPnL = filteredAccounts.sumOf { it.pnl }
                     val totalShare = filteredAccounts.sumOf { it.my_share }
-                    
+
                     view?.findViewById<TextView>(R.id.clientTotalPnL)?.let { tv ->
                         tv.text = "₹${String.format("%,d", totalPnL)}"
                         tv.setTextColor(resources.getColor(if (totalPnL < 0) R.color.danger else R.color.success, null))
                     }
                     view?.findViewById<TextView>(R.id.clientTotalShare)?.text = "₹${String.format("%,d", totalShare)}"
+
+                    // Show message if no accounts found
+                    if (filteredAccounts.isEmpty()) {
+                        view?.findViewById<TextView>(R.id.emptyAccountsText)?.visibility = View.VISIBLE
+                        recyclerView.visibility = View.GONE
+                        Toast.makeText(context, "No linked exchanges found for this client", Toast.LENGTH_SHORT).show()
+                    } else {
+                        view?.findViewById<TextView>(R.id.emptyAccountsText)?.visibility = View.GONE
+                        recyclerView.visibility = View.VISIBLE
+                        Toast.makeText(context, "Loaded ${filteredAccounts.size} linked exchange(s)", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    val errorBody = response.errorBody()?.string()
+                    android.util.Log.e("ClientDetailFragment", "API call failed: ${response.code()}, Error: $errorBody")
+
+                    when (response.code()) {
+                        401 -> Toast.makeText(context, "Authentication failed - please login again", Toast.LENGTH_LONG).show()
+                        403 -> Toast.makeText(context, "Access denied - insufficient permissions", Toast.LENGTH_LONG).show()
+                        else -> Toast.makeText(context, "Failed to load accounts (${response.code()})", Toast.LENGTH_SHORT).show()
+                    }
                 }
             } catch (e: Exception) {
+                android.util.Log.e("ClientDetailFragment", "Exception loading accounts", e)
+                Toast.makeText(context, "Network error - check connection", Toast.LENGTH_SHORT).show()
                 e.printStackTrace()
             }
         }

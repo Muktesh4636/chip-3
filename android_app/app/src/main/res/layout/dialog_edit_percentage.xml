@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Edit Share Percentages"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="@color/text_main"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Profit Share Percentage (%)"
+        android:textSize="14sp"
+        android:textColor="@color/text_main"
+        android:layout_marginBottom="8dp" />
+
+    <EditText
+        android:id="@+id/editProfitPercentage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:inputType="number"
+        android:maxLength="3"
+        android:hint="Enter profit share %"
+        android:textSize="16sp"
+        android:background="@drawable/edit_text_bg"
+        android:padding="12dp"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Loss Share Percentage (%)"
+        android:textSize="14sp"
+        android:textColor="@color/text_main"
+        android:layout_marginBottom="8dp" />
+
+    <EditText
+        android:id="@+id/editLossPercentage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:inputType="number"
+        android:maxLength="3"
+        android:hint="Enter loss share %"
+        android:textSize="16sp"
+        android:background="@drawable/edit_text_bg"
+        android:padding="12dp"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Note: Percentages should be between 0-100"
+        android:textSize="12sp"
+        android:textColor="@color/text_muted"
+        android:layout_marginTop="8dp" />
+
+</LinearLayout>

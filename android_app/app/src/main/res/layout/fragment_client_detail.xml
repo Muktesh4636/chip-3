@@ -147,6 +147,17 @@
             android:clipToPadding="false"
             android:paddingBottom="80dp" />
 
+        <TextView
+            android:id="@+id/emptyAccountsText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="No linked exchanges found for this client.\nTap the + button to link an exchange."
+            android:textSize="14sp"
+            android:textColor="@color/text_muted"
+            android:gravity="center"
+            android:padding="32dp"
+            android:visibility="gone" />
+
     </LinearLayout>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton

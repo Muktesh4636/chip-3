@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="0dp"
+    android:layout_height="wrap_content"
+    android:layout_weight="1"
+    android:layout_margin="4dp"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="1dp"
+    app:cardBackgroundColor="@color/bg_card">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:gravity="center">
+
+        <TextView
+            android:id="@+id/portfolioMetricTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="METRIC TITLE"
+            android:textSize="10sp"
+            android:textColor="@color/text_muted"
+            android:textAllCaps="true"
+            android:fontFamily="sans-serif-medium" />
+
+        <TextView
+            android:id="@+id/portfolioMetricValue"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="₹0"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@color/primary"
+            android:layout_marginTop="8dp" />
+
+        <TextView
+            android:id="@+id/portfolioMetricChange"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="+0%"
+            android:textSize="11sp"
+            android:textColor="@color/success"
+            android:layout_marginTop="4dp" />
+
+    </LinearLayout>
+
+</androidx.cardview.widget.CardView>

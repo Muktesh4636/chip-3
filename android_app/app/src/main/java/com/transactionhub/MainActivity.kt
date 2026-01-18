@@ -13,6 +13,8 @@ import com.transactionhub.ui.exchanges.ExchangesFragment
 import com.transactionhub.ui.transactions.TransactionsFragment
 import com.transactionhub.ui.payments.PendingPaymentsFragment
 import com.transactionhub.ui.more.MoreFragment
+import com.transactionhub.ui.more.ReportsFragment
+import com.transactionhub.ui.more.UserProfileFragment
 import com.transactionhub.utils.PrefManager
 
 class MainActivity : AppCompatActivity() {
@@ -47,16 +49,16 @@ class MainActivity : AppCompatActivity() {
                     loadFragment(ClientsFragment())
                     true
                 }
-                R.id.nav_payments -> {
-                    loadFragment(PendingPaymentsFragment())
+                R.id.nav_exchanges -> {
+                    loadFragment(ExchangesFragment())
                     true
                 }
-                R.id.nav_transactions -> {
-                    loadFragment(TransactionsFragment())
+                R.id.nav_reports -> {
+                    loadFragment(ReportsFragment())
                     true
                 }
-                R.id.nav_more -> {
-                    loadFragment(MoreFragment())
+                R.id.nav_settings -> {
+                    loadFragment(UserProfileFragment())
                     true
                 }
                 else -> false
