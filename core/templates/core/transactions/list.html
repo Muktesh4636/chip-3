@@ -184,6 +184,7 @@
             <th>Funding After</th>
             <th>Exchange After</th>
             <th>Notes</th>
+            <th>Actions</th>
         </tr>
         </thead>
         <tbody>
@@ -199,10 +200,17 @@
                 <td>{% if transaction.funding_after %}{{ transaction.funding_after|currency_inr }}{% else %}—{% endif %}</td>
                 <td>{% if transaction.exchange_balance_after %}{{ transaction.exchange_balance_after|currency_inr }}{% else %}—{% endif %}</td>
                 <td>{{ transaction.notes|default:"—"|truncatewords:5 }}</td>
+                <td>
+                    <div style="display: flex; gap: 8px;">
+                        {% if forloop.first and not request.GET.client and not request.GET.exchange and not request.GET.type %}
+                        {# Only show delete on the global list if no filters are applied, or better, only on account detail page #}
+                        {% endif %}
+                    </div>
+                </td>
             </tr>
         {% empty %}
             <tr>
-                <td colspan="6" style="text-align: center; color: var(--muted); padding: 40px;">
+                <td colspan="7" style="text-align: center; color: var(--muted); padding: 40px;">
                     No transactions yet.
                 </td>
             </tr>

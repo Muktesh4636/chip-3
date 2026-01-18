@@ -860,7 +860,7 @@ def dashboard(request):
         "pending_you_owe_clients": pending_you_owe_clients,
         "active_clients_count": active_clients_count,
         "total_exchanges_count": Exchange.objects.count(),
-        "recent_transactions": transactions_qs[:10],
+        "recent_transactions": transactions_qs.order_by("-created_at", "-id")[:10],
         "all_clients": clients_qs.order_by("name"),
         "all_exchanges": Exchange.objects.all().order_by("name"),
         "selected_client": int(client_id) if client_id else None,
@@ -967,7 +967,7 @@ def client_detail(request, pk):
     transactions = (
         Transaction.objects.filter(client_exchange__client=client)
         .select_related("client_exchange", "client_exchange__exchange")
-        .order_by("-date", "-created_at")[:50]
+        .order_by("-created_at", "-id")[:50]
     )
     
     return render(
@@ -1518,15 +1518,12 @@ def transaction_list(request):
             Q(notes__icontains=search_query)
         )
     
-    # Order by created_at ASC, sequence_no ASC (as per specification)
-    # Handle case where sequence_no field might not be recognized (Django cache issue)
+    # Order by created_at DESC, id DESC (Strict chronological order)
     try:
-        # Check if field exists in model meta
-        Transaction._meta.get_field('sequence_no')
-        transactions = transactions.order_by("created_at", "sequence_no")[:200]
+        transactions = transactions.order_by("-created_at", "-id")[:200]
     except (FieldError, AttributeError):
-        # Fallback if field not found - use id instead
-        transactions = transactions.order_by("created_at", "id")[:200]
+        # Fallback if field not found
+        transactions = transactions.order_by("-id")[:200]
     
     # Filter clients based on client_type for the dropdown
     # All clients are now my clients - no filter needed
@@ -2321,12 +2318,6 @@ def report_overview(request):
     # Formula: My Profit = Your Total Profit × (weighted My Own % / weighted My Total %)
     #          Friend Profit = Your Total Profit × (weighted Friend % / weighted My Total %)
     
-    # #region agent log
-    import json
-    with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"views.py:2319","message":"Profit calculation start","data":{"your_total_profit":str(your_total_profit),"payment_qs_count":payment_qs.count()},"timestamp":int(time.time()*1000)})+'\n')
-    # #endregion
-    
     my_profit_total = Decimal(0)
     friend_profit_total = Decimal(0)
     
@@ -2351,11 +2342,6 @@ def report_overview(request):
         account = tx.client_exchange
         my_total_pct = Decimal(str(account.my_percentage))
         
-        # #region agent log
-        with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"views.py:2348","message":"Processing transaction","data":{"tx_id":tx.id,"payment_amount":str(payment_amount),"my_total_pct":str(my_total_pct),"account_id":account.id},"timestamp":int(time.time()*1000)})+'\n')
-        # #endregion
-        
         if my_total_pct == 0:
             skipped_zero_pct += 1
             continue
@@ -2373,22 +2359,8 @@ def report_overview(request):
             total_weighted_my_own += weighted_my_own_contrib
             total_weighted_friend += weighted_friend_contrib
             total_weighted_amount += weight
-            
-            # #region agent log
-            with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"views.py:2362","message":"Transaction weighted calculation","data":{"tx_id":tx.id,"my_own_pct":str(my_own_pct),"friend_pct":str(friend_pct),"weight":str(weight),"weighted_my_own_contrib":str(weighted_my_own_contrib),"weighted_friend_contrib":str(weighted_friend_contrib)},"timestamp":int(time.time()*1000)})+'\n')
-            # #endregion
         else:
             skipped_no_config += 1
-            # #region agent log
-            with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"views.py:2368","message":"Transaction skipped - no report_config","data":{"tx_id":tx.id,"account_id":account.id},"timestamp":int(time.time()*1000)})+'\n')
-            # #endregion
-    
-    # #region agent log
-    with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"views.py:2372","message":"After loop - accumulated values","data":{"tx_count":tx_count,"skipped_no_config":skipped_no_config,"skipped_zero_pct":skipped_zero_pct,"total_weighted_my_own":str(total_weighted_my_own),"total_weighted_friend":str(total_weighted_friend),"total_weighted_amount":str(total_weighted_amount)},"timestamp":int(time.time()*1000)})+'\n')
-    # #endregion
     
     # Split Your Total Profit using weighted average percentages
     if total_weighted_amount > 0:
@@ -2396,37 +2368,17 @@ def report_overview(request):
         weighted_my_own_ratio = total_weighted_my_own / total_weighted_amount
         weighted_friend_ratio = total_weighted_friend / total_weighted_amount
         
-        # #region agent log
-        with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"views.py:2380","message":"Before final calculation - ratios","data":{"weighted_my_own_ratio":str(weighted_my_own_ratio),"weighted_friend_ratio":str(weighted_friend_ratio),"ratio_sum":str(weighted_my_own_ratio + weighted_friend_ratio)},"timestamp":int(time.time()*1000)})+'\n')
-        # #endregion
-        
         # Split total profit proportionally (works for both positive and negative)
         my_profit_total = your_total_profit * weighted_my_own_ratio
         friend_profit_total = your_total_profit * weighted_friend_ratio
-        
-        # #region agent log
-        with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"views.py:2387","message":"After final calculation - profits","data":{"my_profit_total":str(my_profit_total),"friend_profit_total":str(friend_profit_total),"your_total_profit":str(your_total_profit),"sum_check":str(my_profit_total + friend_profit_total)},"timestamp":int(time.time()*1000)})+'\n')
-        # #endregion
     elif your_total_profit == 0:
         # No profit/loss, so no split needed
         my_profit_total = Decimal(0)
         friend_profit_total = Decimal(0)
-        
-        # #region agent log
-        with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"views.py:2394","message":"Zero profit case","data":{"my_profit_total":"0","friend_profit_total":"0"},"timestamp":int(time.time()*1000)})+'\n')
-        # #endregion
     else:
         # No report configs found, all goes to me
         my_profit_total = your_total_profit
         friend_profit_total = Decimal(0)
-        
-        # #region agent log
-        with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"views.py:2400","message":"No report configs - all profit to me","data":{"my_profit_total":str(my_profit_total),"friend_profit_total":"0"},"timestamp":int(time.time()*1000)})+'\n')
-        # #endregion
     
     # Verify: My Profit + Friend Profit should equal Your Total Profit (within rounding)
     # This ensures the split is correct
@@ -3335,30 +3287,122 @@ def transaction_edit(request, pk):
     from django.contrib import messages
 
     transaction = get_object_or_404(Transaction, pk=pk, client_exchange__client__user=request.user)
-    client_exchange = transaction.client_exchange
     
     if request.method == "POST":
         tx_date = request.POST.get("date")
-        tx_type = request.POST.get("type")  # Use 'type' not 'transaction_type'
-        amount = Decimal(request.POST.get("amount", 0))
+        tx_type = request.POST.get("type")
+        amount_str = request.POST.get("amount", "0")
         note = request.POST.get("note", "")
         
-        if tx_date and tx_type and amount != 0:
+        if tx_date and tx_type:
             try:
-                transaction.date = timezone.make_aware(datetime.strptime(tx_date, "%Y-%m-%d").date())
-                transaction.type = tx_type  # Use 'type' field
-                transaction.amount = int(amount)
+                # Convert string amount to Decimal then to int (for BigIntegerField)
+                amount = int(Decimal(amount_str.replace(',', '')))
+                
+                # Parse date - handle potential errors
+                try:
+                    naive_dt = datetime.strptime(tx_date, "%Y-%m-%d")
+                except ValueError:
+                    messages.error(request, "Invalid date format. Please use YYYY-MM-DD.")
+                    return render(request, "core/transactions/edit.html", {"transaction": transaction})
+
+                # Maintain original time if available
+                if transaction.date:
+                    original_time = transaction.date
+                    # If it's aware, make it naive for the replace operation
+                    if timezone.is_aware(original_time):
+                        original_time = timezone.make_naive(original_time)
+                    
+                    naive_dt = naive_dt.replace(
+                        hour=original_time.hour,
+                        minute=original_time.minute,
+                        second=original_time.second
+                    )
+                
+                # Ensure it's aware before saving
+                if not timezone.is_aware(naive_dt):
+                    transaction.date = timezone.make_aware(naive_dt)
+                else:
+                    transaction.date = naive_dt
+
+                transaction.type = tx_type
+                transaction.amount = amount
                 transaction.notes = note
-                transaction.exchange_balance_after = client_exchange.exchange_balance
                 transaction.save()
 
-                messages.success(request, "Transaction updated successfully.")
-                return redirect(reverse("transaction_list"))
+                messages.success(request, "Transaction audit log updated successfully.")
+                
+                # Redirect to the account detail page if possible, otherwise to transaction list
+                return redirect(reverse("exchange_account_detail", args=[transaction.client_exchange.pk]))
+            except ValueError as ve:
+                messages.error(request, f"Invalid numeric data: {str(ve)}")
             except Exception as e:
                 messages.error(request, f"Error updating transaction: {str(e)}")
-
     
     return render(request, "core/transactions/edit.html", {"transaction": transaction})
+
+
+@login_required
+@require_http_methods(["POST"])
+def transaction_delete(request, pk):
+    """Delete only the latest transaction and revert account balances."""
+    from django.contrib import messages
+    from django.db import transaction as db_transaction
+    
+    transaction = get_object_or_404(Transaction, pk=pk, client_exchange__client__user=request.user)
+    account = transaction.client_exchange
+    
+    # Check if this is the latest transaction for this account
+    # Strict chronological ordering: newest first
+    latest_tx = Transaction.objects.filter(client_exchange=account).order_by('-created_at', '-id').first()
+    
+    if not latest_tx or transaction.pk != latest_tx.pk:
+        messages.error(request, "Only the last transaction can be deleted to maintain logic consistency.")
+        return redirect(reverse("exchange_account_detail", args=[account.pk]))
+    
+    try:
+        with db_transaction.atomic():
+            # 1. Revert account balances to exactly what they were BEFORE this transaction
+            if transaction.funding_before is not None:
+                account.funding = transaction.funding_before
+            
+            if transaction.exchange_balance_before is not None:
+                account.exchange_balance = transaction.exchange_balance_before
+            
+            # 2. Reset the PnL cycle. This is CRITICAL.
+            # Deleting a transaction means the current share lock is potentially invalid.
+            # We clear it so the next calculation uses the reverted balances.
+            account.locked_initial_final_share = None
+            account.locked_share_percentage = None
+            account.locked_initial_pnl = None
+            account.cycle_start_date = None
+            account.locked_initial_funding = None
+            
+            # 3. Special case: If we're deleting a payment settlement, delete corresponding Settlement record
+            if transaction.type in ['RECORD_PAYMENT', 'SETTLEMENT_SHARE']:
+                # Find the most recent settlement for this account
+                last_settlement = Settlement.objects.filter(client_exchange=account).order_by('-date', '-id').first()
+                if last_settlement:
+                    # Verify amount matches (ignoring sign for transaction amount)
+                    if last_settlement.amount == abs(transaction.amount):
+                        last_settlement.delete()
+            
+            # 4. Save account changes
+            account.save()
+            
+            # 5. Delete the transaction record
+            transaction.delete()
+            
+            # 6. Force a fresh re-lock of the share based on the NEW reverted balances
+            # This ensures "My Share" is recalculated and saved IMMEDIATELY.
+            account.lock_initial_share_if_needed()
+            
+            messages.success(request, "Last transaction deleted. Balances and My Share have been recomputed successfully.")
+            
+    except Exception as e:
+        messages.error(request, f"Error deleting transaction: {str(e)}")
+        
+    return redirect(reverse("exchange_account_detail", args=[account.pk]))
 
 
 @login_required
@@ -3475,11 +3519,6 @@ def report_daily(request):
     # 📘 MY PROFIT AND FRIEND PROFIT Calculation (split from Your Total Profit)
     # Calculate weighted average percentages, then split Your Total Profit
     
-    # #region agent log
-    with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"views.py:3453","message":"Daily report profit calculation start","data":{"your_total_profit":str(your_total_profit),"payment_qs_count":payment_qs.count(),"report_type":"daily"},"timestamp":int(time.time()*1000)})+'\n')
-    # #endregion
-    
     my_profit_total = Decimal(0)
     friend_profit_total = Decimal(0)
     
@@ -3524,11 +3563,6 @@ def report_daily(request):
         else:
             skipped_no_config += 1
     
-    # #region agent log
-    with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"views.py:3500","message":"Daily report after loop","data":{"tx_count":tx_count,"skipped_no_config":skipped_no_config,"skipped_zero_pct":skipped_zero_pct,"total_weighted_my_own":str(total_weighted_my_own),"total_weighted_friend":str(total_weighted_friend),"total_weighted_amount":str(total_weighted_amount)},"timestamp":int(time.time()*1000)})+'\n')
-    # #endregion
-    
     # Split Your Total Profit using weighted average percentages
     if total_weighted_amount > 0:
         # Calculate weighted average ratios
@@ -3538,11 +3572,6 @@ def report_daily(request):
         # Split total profit proportionally (works for both positive and negative)
         my_profit_total = your_total_profit * weighted_my_own_ratio
         friend_profit_total = your_total_profit * weighted_friend_ratio
-        
-        # #region agent log
-        with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"views.py:3512","message":"Daily report final profits","data":{"my_profit_total":str(my_profit_total),"friend_profit_total":str(friend_profit_total),"weighted_my_own_ratio":str(weighted_my_own_ratio),"weighted_friend_ratio":str(weighted_friend_ratio)},"timestamp":int(time.time()*1000)})+'\n')
-        # #endregion
     elif your_total_profit == 0:
         # No profit/loss, so no split needed
         my_profit_total = Decimal(0)
@@ -3689,11 +3718,6 @@ def report_weekly(request):
     # 📘 MY PROFIT AND FRIEND PROFIT Calculation (split from Your Total Profit)
     # Calculate weighted average percentages, then split Your Total Profit
     
-    # #region agent log
-    with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"views.py:3453","message":"Daily report profit calculation start","data":{"your_total_profit":str(your_total_profit),"payment_qs_count":payment_qs.count(),"report_type":"daily"},"timestamp":int(time.time()*1000)})+'\n')
-    # #endregion
-    
     my_profit_total = Decimal(0)
     friend_profit_total = Decimal(0)
     
@@ -3738,11 +3762,6 @@ def report_weekly(request):
         else:
             skipped_no_config += 1
     
-    # #region agent log
-    with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"views.py:3500","message":"Daily report after loop","data":{"tx_count":tx_count,"skipped_no_config":skipped_no_config,"skipped_zero_pct":skipped_zero_pct,"total_weighted_my_own":str(total_weighted_my_own),"total_weighted_friend":str(total_weighted_friend),"total_weighted_amount":str(total_weighted_amount)},"timestamp":int(time.time()*1000)})+'\n')
-    # #endregion
-    
     # Split Your Total Profit using weighted average percentages
     if total_weighted_amount > 0:
         # Calculate weighted average ratios
@@ -3752,11 +3771,6 @@ def report_weekly(request):
         # Split total profit proportionally (works for both positive and negative)
         my_profit_total = your_total_profit * weighted_my_own_ratio
         friend_profit_total = your_total_profit * weighted_friend_ratio
-        
-        # #region agent log
-        with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"views.py:3512","message":"Daily report final profits","data":{"my_profit_total":str(my_profit_total),"friend_profit_total":str(friend_profit_total),"weighted_my_own_ratio":str(weighted_my_own_ratio),"weighted_friend_ratio":str(weighted_friend_ratio)},"timestamp":int(time.time()*1000)})+'\n')
-        # #endregion
     elif your_total_profit == 0:
         # No profit/loss, so no split needed
         my_profit_total = Decimal(0)
@@ -3901,11 +3915,6 @@ def report_monthly(request):
     # 📘 MY PROFIT AND FRIEND PROFIT Calculation (split from Your Total Profit)
     # Calculate weighted average percentages, then split Your Total Profit
     
-    # #region agent log
-    with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"views.py:3453","message":"Daily report profit calculation start","data":{"your_total_profit":str(your_total_profit),"payment_qs_count":payment_qs.count(),"report_type":"daily"},"timestamp":int(time.time()*1000)})+'\n')
-    # #endregion
-    
     my_profit_total = Decimal(0)
     friend_profit_total = Decimal(0)
     
@@ -3950,11 +3959,6 @@ def report_monthly(request):
         else:
             skipped_no_config += 1
     
-    # #region agent log
-    with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"views.py:3500","message":"Daily report after loop","data":{"tx_count":tx_count,"skipped_no_config":skipped_no_config,"skipped_zero_pct":skipped_zero_pct,"total_weighted_my_own":str(total_weighted_my_own),"total_weighted_friend":str(total_weighted_friend),"total_weighted_amount":str(total_weighted_amount)},"timestamp":int(time.time()*1000)})+'\n')
-    # #endregion
-    
     # Split Your Total Profit using weighted average percentages
     if total_weighted_amount > 0:
         # Calculate weighted average ratios
@@ -3964,11 +3968,6 @@ def report_monthly(request):
         # Split total profit proportionally (works for both positive and negative)
         my_profit_total = your_total_profit * weighted_my_own_ratio
         friend_profit_total = your_total_profit * weighted_friend_ratio
-        
-        # #region agent log
-        with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"views.py:3512","message":"Daily report final profits","data":{"my_profit_total":str(my_profit_total),"friend_profit_total":str(friend_profit_total),"weighted_my_own_ratio":str(weighted_my_own_ratio),"weighted_friend_ratio":str(weighted_friend_ratio)},"timestamp":int(time.time()*1000)})+'\n')
-        # #endregion
     elif your_total_profit == 0:
         # No profit/loss, so no split needed
         my_profit_total = Decimal(0)
@@ -4154,11 +4153,6 @@ def report_custom(request):
     # 📘 MY PROFIT AND FRIEND PROFIT Calculation (split from Your Total Profit)
     # Calculate weighted average percentages, then split Your Total Profit
     
-    # #region agent log
-    with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"views.py:3453","message":"Daily report profit calculation start","data":{"your_total_profit":str(your_total_profit),"payment_qs_count":payment_qs.count(),"report_type":"daily"},"timestamp":int(time.time()*1000)})+'\n')
-    # #endregion
-    
     my_profit_total = Decimal(0)
     friend_profit_total = Decimal(0)
     
@@ -4203,11 +4197,6 @@ def report_custom(request):
         else:
             skipped_no_config += 1
     
-    # #region agent log
-    with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"views.py:3500","message":"Daily report after loop","data":{"tx_count":tx_count,"skipped_no_config":skipped_no_config,"skipped_zero_pct":skipped_zero_pct,"total_weighted_my_own":str(total_weighted_my_own),"total_weighted_friend":str(total_weighted_friend),"total_weighted_amount":str(total_weighted_amount)},"timestamp":int(time.time()*1000)})+'\n')
-    # #endregion
-    
     # Split Your Total Profit using weighted average percentages
     if total_weighted_amount > 0:
         # Calculate weighted average ratios
@@ -4217,11 +4206,6 @@ def report_custom(request):
         # Split total profit proportionally (works for both positive and negative)
         my_profit_total = your_total_profit * weighted_my_own_ratio
         friend_profit_total = your_total_profit * weighted_friend_ratio
-        
-        # #region agent log
-        with open('/root/Chips_dashboard/.cursor/debug.log', 'a') as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"views.py:3512","message":"Daily report final profits","data":{"my_profit_total":str(my_profit_total),"friend_profit_total":str(friend_profit_total),"weighted_my_own_ratio":str(weighted_my_own_ratio),"weighted_friend_ratio":str(weighted_friend_ratio)},"timestamp":int(time.time()*1000)})+'\n')
-        # #endregion
     elif your_total_profit == 0:
         # No profit/loss, so no split needed
         my_profit_total = Decimal(0)
@@ -4487,8 +4471,8 @@ def exchange_account_detail(request, pk):
     settlement_info = account.get_remaining_settlement_amount()
     remaining_amount = settlement_info['remaining']
     
-    # Get recent transactions for this account
-    transactions = Transaction.objects.filter(client_exchange=account).order_by("-date", "-created_at")[:20]
+    # Get recent transactions for this account (Strict chronological order)
+    transactions = Transaction.objects.filter(client_exchange=account).order_by("-created_at", "-id")[:20]
     
     # Get recent settlements
     settlements = Settlement.objects.filter(client_exchange=account).order_by("-date", "-created_at")[:10]

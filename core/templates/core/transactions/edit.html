@@ -2,57 +2,55 @@
 
 {% block title %}Edit Transaction · Transaction Hub{% endblock %}
 {% block page_title %}Edit Transaction{% endblock %}
-{% block page_subtitle %}Update transaction details{% endblock %}
+{% block page_subtitle %}Update transaction details (Audit Only){% endblock %}
 
 {% block content %}
-<div style="background: var(--bg-content); border-radius: 8px; padding: 24px; border: 1px solid var(--border); max-width: 700px;">
+<div style="background: var(--bg-content); border-radius: 12px; padding: 32px; border: 1px solid var(--border); max-width: 600px; margin: 0 auto;">
+    <div style="margin-bottom: 24px; padding: 16px; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; color: #92400e; font-size: 14px;">
+        <strong>Note:</strong> Editing transactions updates the audit log history. To fix actual account balances, use the "Add Funding" or "Update Balance" options on the Exchange Account page.
+    </div>
+
     <form method="post">
         {% csrf_token %}
+        
         <div class="form-row">
-            <label class="field-label">Client-Exchange</label>
-            <input type="text" class="field-input" value="{{ transaction.client_exchange.client.name }} - {{ transaction.client_exchange.exchange.name }}" disabled>
+            <label class="field-label">Account</label>
+            <div style="padding: 10px 14px; background: #f9fafb; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; color: var(--muted);">
+                {{ transaction.client_exchange.client.name }} - {{ transaction.client_exchange.exchange.name }}
+            </div>
         </div>
         
         <div class="form-row">
-            <label class="field-label">Date *</label>
+            <label class="field-label">Date</label>
             <input type="date" name="date" class="field-input" value="{{ transaction.date|date:'Y-m-d' }}" required>
         </div>
         
         <div class="form-row">
-            <label class="field-label">Transaction Type *</label>
-            <select name="transaction_type" class="field-input" required>
-                <option value="FUNDING" {% if transaction.transaction_type == 'FUNDING' %}selected{% endif %}>Funding (You give money to client)</option>
-                <option value="PROFIT" {% if transaction.transaction_type == 'PROFIT' %}selected{% endif %}>Profit</option>
-                <option value="LOSS" {% if transaction.transaction_type == 'LOSS' %}selected{% endif %}>Loss</option>
-                <option value="SETTLEMENT" {% if transaction.transaction_type == 'SETTLEMENT' %}selected{% endif %}>Settlement / Payout</option>
+            <label class="field-label">Transaction Type</label>
+            <select name="type" class="field-input" required>
+                {% for type_code, type_name in transaction.TRANSACTION_TYPES %}
+                    <option value="{{ type_code }}" {% if transaction.type == type_code %}selected{% endif %}>
+                        {{ type_name }}
+                    </option>
+                {% endfor %}
             </select>
         </div>
         
         <div class="form-row">
-            <label class="field-label">Amount (₹) *</label>
-            <input type="number" name="amount" class="field-input" step="0.1" min="0" value="{{ transaction.amount }}" required>
+            <label class="field-label">Amount (₹)</label>
+            <input type="number" name="amount" class="field-input" value="{{ transaction.amount }}" required>
+            <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Positive for funding/profit, negative for payout/loss.</div>
         </div>
         
         <div class="form-row">
-            <label class="field-label">Note</label>
-            <textarea name="note" class="field-input" rows="3">{{ transaction.note }}</textarea>
+            <label class="field-label">Notes</label>
+            <textarea name="note" class="field-input" rows="3">{{ transaction.notes }}</textarea>
         </div>
         
-        <div style="background: #f9fafb; padding: 16px; border-radius: 6px; margin: 16px 0;">
-            <div style="font-size: 13px; color: var(--muted); margin-bottom: 8px;">Current Shares:</div>
-            <div style="font-size: 14px;">
-                <div>Your Share: ₹ {{ transaction.your_share_amount }}</div>
-                <div>Client Share: ₹ {{ transaction.client_share_amount }}</div>
-                <div>Company Share: ₹ {{ transaction.company_share_amount }}</div>
-            </div>
-            <div style="font-size: 12px; color: var(--muted); margin-top: 8px;">Shares will be recalculated on save</div>
-        </div>
-        
-        <div style="display: flex; gap: 12px; margin-top: 20px;">
-            <button type="submit" class="btn btn-primary">Save Changes</button>
-            <a href="{% url 'transactions:list' %}" class="btn">Cancel</a>
+        <div style="display: flex; gap: 12px; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border);">
+            <button type="submit" class="btn btn-primary" style="flex: 1;">Save Changes</button>
+            <a href="{% url 'transaction_list' %}" class="btn" style="flex: 1;">Cancel</a>
         </div>
     </form>
 </div>
 {% endblock %}
-

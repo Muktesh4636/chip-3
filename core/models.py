@@ -775,9 +775,9 @@ class Transaction(TimeStampedModel):
     notes = models.TextField(blank=True, null=True)
     
     class Meta:
-        ordering = ['created_at', 'sequence_no']
+        ordering = ['-created_at', '-id']
         indexes = [
-            models.Index(fields=['client_exchange', 'created_at', 'sequence_no']),
+            models.Index(fields=['client_exchange', '-created_at']),
         ]
     
     def __str__(self):

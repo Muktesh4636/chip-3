@@ -36,6 +36,8 @@ urlpatterns = [
     # Transactions (audit trail)
     path('transactions/', views.transaction_list, name='transaction_list'),
     path('transactions/<int:pk>/', views.transaction_detail, name='transaction_detail'),
+    path('transactions/<int:pk>/edit/', views.transaction_edit, name='transaction_edit'),
+    path('transactions/<int:pk>/delete/', views.transaction_delete, name='transaction_delete'),
     
     # Pending Payments
     path('pending/', views.pending_summary, name='pending_summary'),
