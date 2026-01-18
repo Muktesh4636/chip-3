@@ -1,0 +1,265 @@
+{% extends "core/base.html" %}
+
+{% block title %}Link Client to Exchange · Transaction Hub{% endblock %}
+{% block page_title %}Link Client to Exchange{% endblock %}
+{% block page_subtitle %}Configure client-exchange account with percentages{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 500px;">
+    {% if messages %}
+        {% for message in messages %}
+            <div style="padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; {% if message.tags == 'success' %}background: #d1fae5; color: #065f46; border: 1px solid #10b981;{% elif message.tags == 'error' %}background: #fee2e2; color: #991b1b; border: 1px solid #dc2626;{% else %}background: #dbeafe; color: #1e40af; border: 1px solid #3b82f6;{% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+    
+    <form method="post">
+        {% csrf_token %}
+        
+        <div class="form-row">
+            <label class="field-label">Client *</label>
+            <select name="client" class="field-input" required>
+                <option value="">-- Select Client --</option>
+                {% for client in clients %}
+                    <option value="{{ client.pk }}" {% if selected_client_id|default:"" == client.pk|stringformat:"s" %}selected{% endif %}>{{ client.name }}{% if client.code %} ({{ client.code }}){% endif %}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="form-row">
+            <label class="field-label">Exchange *</label>
+            <select name="exchange" id="exchange_select" class="field-input" required>
+                <option value="">-- Select Exchange --</option>
+                {% for exchange in exchanges %}
+                    <option value="{{ exchange.pk }}" data-name="{{ exchange.name }}" data-version="{{ exchange.version|default:'' }}" data-code="{{ exchange.code|default:'' }}">{{ exchange.name }}{% if exchange.version %} - {{ exchange.version }}{% endif %}{% if exchange.code %} ({{ exchange.code }}){% endif %}</option>
+                {% endfor %}
+            </select>
+            <div id="exchange_version_display" style="font-size: 13px; color: #374151; margin-top: 8px; padding: 10px 14px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; display: none;">
+                <div style="margin-bottom: 6px;"><strong style="color: #111827;">Exchange:</strong> <span id="exchange_name_display" style="color: #1f2937;"></span></div>
+                <div><strong style="color: #111827;">Version:</strong> <span id="exchange_version_text" style="color: #1f2937;">-</span></div>
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <label class="field-label">My Total % *</label>
+            <input type="number" name="my_percentage" id="my_percentage" class="field-input" min="0" max="100" step="0.01" required>
+            <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">
+                Your total percentage share (0-100, decimals allowed)
+            </div>
+        </div>
+        
+        <div style="border-top: 1px solid var(--border); margin: 20px 0; padding-top: 20px;">
+            <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px; padding: 12px; margin-bottom: 16px;">
+                <div style="font-size: 13px; color: #075985; font-weight: 600; margin-bottom: 4px;">⚠️ Validation Rule:</div>
+                <div style="font-size: 13px; color: #075985;">Company % + My Own % <strong>must equal</strong> My Total %</div>
+                <div id="percentage-summary" style="font-size: 13px; color: #0c4a6e; margin-top: 8px; font-weight: 600;">
+                    Current: Company % (0) + My Own % (0) = <span id="current-sum">0</span> | My Total %: <span id="my-total-display">0</span>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <label class="field-label">Company % (Report Only)</label>
+                <input type="number" name="friend_percentage" id="friend_percentage" class="field-input" min="0" max="100" step="0.01" value="0" placeholder="0">
+                <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">
+                    Company percentage (report only, decimals allowed)
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <label class="field-label">My Own % (Report Only)</label>
+                <input type="number" name="my_own_percentage" id="my_own_percentage" class="field-input" min="0" max="100" step="0.01" value="0" placeholder="0">
+                <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">
+                    Your own percentage (report only, decimals allowed)
+                </div>
+            </div>
+        </div>
+        
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const exchangeSelect = document.getElementById('exchange_select');
+            const exchangeVersionDisplay = document.getElementById('exchange_version_display');
+            const exchangeNameDisplay = document.getElementById('exchange_name_display');
+            const exchangeVersionText = document.getElementById('exchange_version_text');
+            const myTotalInput = document.getElementById('my_percentage');
+            const friendInput = document.getElementById('friend_percentage');
+            const myOwnInput = document.getElementById('my_own_percentage');
+            const summaryDiv = document.getElementById('percentage-summary');
+            
+            // Function to update exchange version display
+            function updateExchangeVersionDisplay() {
+                const selectedOption = exchangeSelect.options[exchangeSelect.selectedIndex];
+                if (selectedOption && selectedOption.value) {
+                    const exchangeName = selectedOption.getAttribute('data-name') || '';
+                    const exchangeVersion = selectedOption.getAttribute('data-version') || '';
+                    const exchangeCode = selectedOption.getAttribute('data-code') || '';
+                    
+                    exchangeNameDisplay.textContent = exchangeName + (exchangeCode ? ` (${exchangeCode})` : '');
+                    exchangeVersionText.textContent = exchangeVersion || 'Not specified';
+                    exchangeVersionDisplay.style.display = 'block';
+                } else {
+                    exchangeVersionDisplay.style.display = 'none';
+                }
+            }
+            
+            // Show exchange version when exchange is selected
+            exchangeSelect.addEventListener('change', updateExchangeVersionDisplay);
+            
+            // Also check on page load if an exchange is already selected
+            updateExchangeVersionDisplay();
+            
+            let isUpdating = false; // Prevent infinite loops
+            
+            function updateValidation() {
+                if (isUpdating) return;
+                
+                const myTotal = parseFloat(myTotalInput.value) || 0;
+                const friend = parseFloat(friendInput.value) || 0;
+                const myOwn = parseFloat(myOwnInput.value) || 0;
+                const sum = friend + myOwn;
+                
+                // Update validation message (round to 2 decimal places for display)
+                const myTotalDisplay = myTotal.toFixed(2);
+                const friendDisplay = friend.toFixed(2);
+                const myOwnDisplay = myOwn.toFixed(2);
+                const sumDisplay = sum.toFixed(2);
+                const diffDisplay = Math.abs(sum - myTotal).toFixed(2);
+                
+                // Use small epsilon for floating point comparison
+                const epsilon = 0.01;
+                
+                if (Math.abs(myTotal) < epsilon) {
+                    summaryDiv.style.color = '#64748b';
+                    summaryDiv.innerHTML = `Current: Company % (${friendDisplay}) + My Own % (${myOwnDisplay}) = <strong>${sumDisplay}</strong> | My Total %: <strong>0</strong>`;
+                } else if (Math.abs(sum - myTotal) < epsilon) {
+                    summaryDiv.style.color = '#16a34a';
+                    summaryDiv.innerHTML = `✅ Valid: Company % (${friendDisplay}) + My Own % (${myOwnDisplay}) = <strong>${sumDisplay}</strong> | My Total %: <strong>${myTotalDisplay}</strong>`;
+                } else {
+                    summaryDiv.style.color = '#dc2626';
+                    summaryDiv.innerHTML = `❌ Invalid: Company % (${friendDisplay}) + My Own % (${myOwnDisplay}) = <strong>${sumDisplay}</strong> | My Total %: <strong>${myTotalDisplay}</strong> (Difference: ${diffDisplay})`;
+                }
+            }
+            
+            // Auto-calculate My Own % when My Total % or Company % changes
+            function autoCalculateMyOwn() {
+                if (isUpdating) return;
+                isUpdating = true;
+                
+                const myTotal = parseFloat(myTotalInput.value) || 0;
+                const friend = parseFloat(friendInput.value) || 0;
+                
+                if (myTotal > 0) {
+                    // Ensure Company % doesn't exceed My Total %
+                    if (friend > myTotal) {
+                        friendInput.value = myTotal.toFixed(2);
+                        myOwnInput.value = '0.00';
+                    } else {
+                        // Calculate My Own % = My Total % - Company %
+                        const calculatedMyOwn = myTotal - friend;
+                        myOwnInput.value = Math.max(0, Math.min(100, calculatedMyOwn)).toFixed(2);
+                    }
+                } else {
+                    myOwnInput.value = '0.00';
+                }
+                
+                isUpdating = false;
+                updateValidation();
+            }
+            
+            // Auto-calculate Company % when My Total % or My Own % changes
+            function autoCalculateFriend() {
+                if (isUpdating) return;
+                isUpdating = true;
+                
+                const myTotal = parseFloat(myTotalInput.value) || 0;
+                const myOwn = parseFloat(myOwnInput.value) || 0;
+                
+                if (myTotal > 0) {
+                    // Ensure My Own % doesn't exceed My Total %
+                    if (myOwn > myTotal) {
+                        myOwnInput.value = myTotal.toFixed(2);
+                        friendInput.value = '0.00';
+                    } else {
+                        // Calculate Company % = My Total % - My Own %
+                        const calculatedFriend = myTotal - myOwn;
+                        friendInput.value = Math.max(0, Math.min(100, calculatedFriend)).toFixed(2);
+                    }
+                } else {
+                    friendInput.value = '0.00';
+                }
+                
+                isUpdating = false;
+                updateValidation();
+            }
+            
+            // When My Total % changes, auto-adjust Friend % and My Own % to sum to My Total %
+            myTotalInput.addEventListener('input', function() {
+                if (isUpdating) return;
+                isUpdating = true;
+                
+                const myTotal = parseFloat(myTotalInput.value) || 0;
+                const friend = parseFloat(friendInput.value) || 0;
+                const myOwn = parseFloat(myOwnInput.value) || 0;
+                
+                if (myTotal > 0) {
+                    // If Friend % is set, keep it and calculate My Own %
+                    if (friend > 0 && friend <= myTotal) {
+                        myOwnInput.value = (myTotal - friend).toFixed(2);
+                    }
+                    // If My Own % is set, keep it and calculate Friend %
+                    else if (myOwn > 0 && myOwn <= myTotal) {
+                        friendInput.value = (myTotal - myOwn).toFixed(2);
+                    }
+                    // If neither is set or both are 0, set Friend % to 0 and My Own % to My Total %
+                    else {
+                        friendInput.value = '0.00';
+                        myOwnInput.value = myTotal.toFixed(2);
+                    }
+                } else {
+                    friendInput.value = '0.00';
+                    myOwnInput.value = '0.00';
+                }
+                
+                isUpdating = false;
+                updateValidation();
+            });
+            
+            // When Company % changes, auto-calculate My Own % to ensure sum equals My Total %
+            friendInput.addEventListener('input', function() {
+                if (isUpdating) return;
+                autoCalculateMyOwn();
+            });
+            
+            // When My Own % changes, auto-calculate Company % to ensure sum equals My Total %
+            myOwnInput.addEventListener('input', function() {
+                if (isUpdating) return;
+                autoCalculateFriend();
+            });
+            
+            // Initial validation
+            updateValidation();
+            
+            // Form submission validation
+            document.querySelector('form').addEventListener('submit', function(e) {
+                const myTotal = parseFloat(myTotalInput.value) || 0;
+                const friend = parseFloat(friendInput.value) || 0;
+                const myOwn = parseFloat(myOwnInput.value) || 0;
+                const sum = friend + myOwn;
+                
+                // Use epsilon for floating point comparison
+                const epsilon = 0.01;
+                
+                if (myTotal > 0 && Math.abs(sum - myTotal) >= epsilon) {
+                    e.preventDefault();
+                    alert(`Validation Error: Company % (${friend.toFixed(2)}) + My Own % (${myOwn.toFixed(2)}) = ${sum.toFixed(2)}, but My Total % = ${myTotal.toFixed(2)}.\n\nPlease ensure Company % + My Own % equals My Total %.`);
+                    return false;
+                }
+            });
+        });
+        </script>
+        
+        <button type="submit" class="btn btn-primary mt-3">Link Client to Exchange</button>
+        <a href="{% url 'exchange_list' %}" class="btn mt-3" style="margin-left: 8px;">Cancel</a>
+    </form>
+</div>
+{% endblock %}

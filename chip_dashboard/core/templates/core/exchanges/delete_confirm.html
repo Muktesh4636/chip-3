@@ -1,0 +1,46 @@
+{% extends "core/base.html" %}
+
+{% block title %}Delete Exchange · {{ exchange.name }}{% endblock %}
+{% block page_title %}Delete Exchange{% endblock %}
+{% block page_subtitle %}{{ exchange.name }}{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 600px;">
+    <div style="background: #fee2e2; color: #991b1b; padding: 16px; border-radius: 8px; margin-bottom: 24px; border: 1px solid #dc2626;">
+        <strong>⚠️ Warning: This action cannot be undone!</strong>
+        <p style="margin: 8px 0 0 0; font-size: 14px;">
+            Deleting this exchange will permanently remove:
+            <ul style="margin: 8px 0 0 20px; padding-left: 0;">
+                <li>The exchange itself</li>
+                <li>All {{ client_accounts_count }} client account(s) linked to this exchange</li>
+                <li>All transactions, settlements, and related data</li>
+            </ul>
+        </p>
+    </div>
+    
+    <div style="margin-bottom: 24px;">
+        <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">Exchange Details</h3>
+        <div style="background: var(--bg-content); padding: 16px; border-radius: 8px; border: 1px solid var(--border);">
+            <div style="margin-bottom: 8px;"><strong>Name:</strong> {{ exchange.name }}</div>
+            {% if exchange.code %}
+            <div style="margin-bottom: 8px;"><strong>Code:</strong> {{ exchange.code }}</div>
+            {% endif %}
+            <div><strong>Linked Client Accounts:</strong> {{ client_accounts_count }}</div>
+        </div>
+    </div>
+    
+    <form method="post">
+        {% csrf_token %}
+        <div style="display: flex; gap: 12px;">
+            <button type="submit" class="btn" style="background: #fee2e2; color: #991b1b; border: 1px solid #dc2626;">
+                Yes, Delete Permanently
+            </button>
+            <a href="{% url 'exchange_detail' exchange.pk %}" class="btn">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+
+
+

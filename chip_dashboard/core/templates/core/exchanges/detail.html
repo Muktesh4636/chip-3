@@ -1,0 +1,111 @@
+{% extends "core/base.html" %}
+{% load math_filters %}
+
+{% block title %}Exchange · {{ exchange.name }}{% endblock %}
+{% block page_title %}{{ exchange.name }}{% endblock %}
+{% block page_subtitle %}{% if exchange.code %}Code: {{ exchange.code }}{% endif %}{% if exchange.version %} · Version: {{ exchange.version }}{% endif %} · All client accounts{% endblock %}
+
+{% block page_actions %}
+<div style="display: flex; gap: 10px; flex-wrap: wrap;">
+    <a href="{% url 'exchange_list' %}" class="btn">Back to Exchanges</a>
+    <form method="post" action="{% url 'exchange_toggle_status' exchange.pk %}" style="display: inline;">
+        {% csrf_token %}
+        {% if exchange.is_active %}
+            <button type="submit" class="btn" style="background: #fef3c7; color: #92400e; border: 1px solid #f59e0b;">Disable Exchange</button>
+        {% else %}
+            <button type="submit" class="btn" style="background: #d1fae5; color: #065f46; border: 1px solid #10b981;">Enable Exchange</button>
+        {% endif %}
+    </form>
+    <form method="post" action="{% url 'exchange_delete' exchange.pk %}" style="display: inline;" onsubmit="return confirm('Are you sure you want to permanently delete exchange \"{{ exchange.name }}\"? This action cannot be undone and will delete all associated client accounts and transactions.');">
+        {% csrf_token %}
+        <button type="submit" class="btn" style="background: #fee2e2; color: #991b1b; border: 1px solid #dc2626;">Delete Exchange</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Exchange Info Cards -->
+<div class="card-grid" style="margin-bottom: 24px;">
+    <div class="card">
+        <div class="card-title">Status</div>
+        <div class="card-value">
+            {% if exchange.is_active %}
+                <span class="badge badge-success">Active</span>
+            {% else %}
+                <span class="badge" style="background: #fee2e2; color: #991b1b;">Disabled</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-title">Exchange Code</div>
+        <div class="card-value">{% if exchange.code %}{{ exchange.code }}{% else %}<span style="color: var(--muted);">—</span>{% endif %}</div>
+    </div>
+    <div class="card">
+        <div class="card-title">Version</div>
+        <div class="card-value">{% if exchange.version %}{{ exchange.version }}{% else %}<span style="color: var(--muted);">—</span>{% endif %}</div>
+    </div>
+    <div class="card">
+        <div class="card-title">Linked Clients</div>
+        <div class="card-value">{{ accounts|length }}</div>
+    </div>
+    <div class="card">
+        <div class="card-title">Total Funding</div>
+        <div class="card-value">{{ total_funding|currency_inr }}</div>
+    </div>
+    <div class="card">
+        <div class="card-title">Total Exchange Balance</div>
+        <div class="card-value">{{ total_exchange_balance|currency_inr }}</div>
+    </div>
+    <div class="card">
+        <div class="card-title">Total Client PnL</div>
+        <div class="card-value {% if total_client_pnl > 0 %}positive{% elif total_client_pnl < 0 %}negative{% endif %}">
+            {{ total_client_pnl|currency_inr }}
+        </div>
+    </div>
+</div>
+
+<!-- Client Accounts Table -->
+<div class="table-wrapper">
+    <div class="table-header">
+        <span>Client Accounts</span>
+        <span class="pill">
+            <span>Total</span>
+            <span>{{ accounts|length }}</span>
+        </span>
+    </div>
+    <table>
+        <thead>
+        <tr>
+            <th>Client Name</th>
+            <th>Funding</th>
+            <th>Exchange Balance</th>
+            <th>Client PnL</th>
+            <th>My Total %</th>
+            <th>Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for account in accounts %}
+            <tr>
+                <td><strong>{{ account.client.name }}</strong>{% if account.client.code %} <span style="color: var(--muted);">({{ account.client.code }})</span>{% endif %}</td>
+                <td>{{ account.funding|currency_inr }}</td>
+                <td>{{ account.exchange_balance|currency_inr }}</td>
+                <td class="{% if account.compute_client_pnl > 0 %}positive{% elif account.compute_client_pnl < 0 %}negative{% endif %}">
+                    {{ account.compute_client_pnl|currency_inr }}
+                </td>
+                <td>{{ account.my_percentage }}%</td>
+                <td>
+                    <a href="{% url 'exchange_account_detail' account.pk %}" class="btn btn-sm">View Account</a>
+                </td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td colspan="6">No client accounts linked to this exchange yet.</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+

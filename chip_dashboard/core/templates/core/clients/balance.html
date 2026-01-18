@@ -1,0 +1,351 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ client.name }} Balance · Transaction Hub{% endblock %}
+{% block page_title %}{{ client.name }} Balance{% endblock %}
+{% block page_subtitle %}{% if client.code %}Code: {{ client.code }} · {% endif %}{% if selected_exchange_name %}Exchange: {{ selected_exchange_name }}{% else %}All Exchanges{% endif %}{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'my_clients:detail' client.pk %}" class="btn">Back to Client</a>
+{% endblock %}
+
+{% block content %}
+<!-- Exchange Filter -->
+{% if all_client_exchanges|length > 1 %}
+<div style="background: var(--bg-content); border-radius: 8px; padding: 20px; border: 1px solid var(--border); margin-bottom: 24px;">
+    <form method="get" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+        <label class="field-label" style="margin: 0;">Filter by Exchange:</label>
+        <select name="exchange" class="field-input" style="width: auto;" onchange="this.form.submit()">
+            <option value="">All Exchanges</option>
+            {% for ce in all_client_exchanges %}
+                <option value="{{ ce.pk }}" {% if selected_exchange_id == ce.pk %}selected{% endif %}>
+                    {{ ce.exchange.name }}{% if ce.exchange.code %} ({{ ce.exchange.code }}){% endif %}
+                </option>
+            {% endfor %}
+        </select>
+        {% if selected_exchange_id %}
+            <a href="{% url 'my_clients:balance' client.pk %}" class="btn">Clear</a>
+        {% endif %}
+    </form>
+</div>
+{% endif %}
+
+<!-- Record Balance Form -->
+<div style="background: var(--bg-content); border-radius: 8px; padding: 20px; border: 1px solid var(--border); margin-bottom: 24px;">
+    <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 20px;">
+        {% if edit_balance %}Edit Daily Balance{% else %}Record Daily Remaining Balance{% endif %}
+    </h2>
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="record_balance">
+        {% if edit_balance %}
+            <input type="hidden" name="balance_id" value="{{ edit_balance.pk }}">
+        {% endif %}
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-bottom: 16px;">
+            <div>
+                <label class="field-label">Exchange *</label>
+                <select name="client_exchange" id="form-exchange-select" class="field-input" required {% if edit_balance %}disabled{% endif %} onchange="loadExchangeBalanceData(this.value)">
+                    <option value="">Select Exchange</option>
+                    {% for ce in all_client_exchanges %}
+                        <option value="{{ ce.pk }}" {% if edit_balance and ce.pk == edit_balance.client_exchange.pk %}selected{% elif selected_exchange_id == ce.pk %}selected{% endif %}>
+                            {{ ce.exchange.name }}{% if ce.exchange.code %} ({{ ce.exchange.code }}){% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+                {% if edit_balance %}
+                    <input type="hidden" name="client_exchange" value="{{ edit_balance.client_exchange.pk }}">
+                {% endif %}
+                <div id="balance-loading" style="display: none; font-size: 12px; color: var(--accent); margin-top: 4px;">Loading...</div>
+            </div>
+            
+            <div>
+                <label class="field-label">Date *</label>
+                <input type="date" name="date" id="balance-date" class="field-input" value="{% if edit_balance %}{{ edit_balance.date|date:'Y-m-d' }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}" required>
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 16px;">
+            <label class="field-label">Remaining Balance (₹) *</label>
+            <input type="number" name="remaining_balance" id="balance-amount" class="field-input" step="0.1" min="0" value="{% if edit_balance %}{{ edit_balance.remaining_balance }}{% endif %}" required placeholder="0.0" style="max-width: 300px;">
+            <div id="calculated-balance-hint" style="display: none; font-size: 12px; color: var(--accent); margin-top: 6px; font-weight: 500;"></div>
+        </div>
+        
+        <div style="margin-bottom: 16px;">
+            <label class="field-label">Note (Optional)</label>
+            <input type="text" name="note" id="balance-note" class="field-input" value="{% if edit_balance %}{{ edit_balance.note }}{% endif %}" placeholder="Add a note about this balance">
+            <div id="funding-hint" style="display: none; font-size: 12px; color: var(--success); margin-top: 6px; font-weight: 500;"></div>
+        </div>
+        
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <button type="submit" class="btn btn-primary">{% if edit_balance %}Update Balance{% else %}Record Balance{% endif %}</button>
+            {% if edit_balance %}
+                <a href="{% url 'my_clients:balance' client.pk %}{% if selected_exchange_id %}?exchange={{ selected_exchange_id }}{% endif %}" class="btn">Cancel</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<!-- Exchange Balance Details -->
+{% for balance in exchange_balances %}
+<div class="table-wrapper" style="margin-bottom: 24px;">
+    <div class="table-header">
+        <div><strong>{{ balance.exchange.name }}</strong>{% if balance.exchange.code %} ({{ balance.exchange.code }}){% endif %} - Balance Summary</div>
+        <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+        <div style="font-size: 20px; font-weight: 600; color: var(--accent);">
+                Current Balance: ₹ {{ balance.total_balance_in_exchange|floatformat:1 }}
+            </div>
+            {% if all_transactions %}
+            <a href="{% url 'transactions:list' %}?client={{ client.pk }}&exchange={{ balance.exchange.pk }}{% if client_type == 'company' %}&client_type=company{% elif client_type == 'my' %}&client_type=my{% endif %}" class="btn btn-primary" style="white-space: nowrap; text-decoration: none;">
+                View All Transactions ({{ all_transactions|length }})
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    <table>
+        <thead>
+        <tr>
+            <th>Summary</th>
+            <th>Amount</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% if client_type == 'company' %}
+        <tr>
+            <td><strong>My Percentage</strong></td>
+            <td><strong style="font-size: 16px; color: var(--accent);">{{ balance.my_share_pct|floatformat:1 }}%</strong></td>
+        </tr>
+        <tr>
+            <td><strong>Company Percentage</strong></td>
+            <td><strong style="font-size: 16px; color: var(--accent);">{{ balance.company_share_pct|floatformat:1 }}%</strong></td>
+        </tr>
+        {% endif %}
+        <tr>
+            <td><strong>Total Turnover</strong></td>
+            <td><strong style="font-size: 18px; color: var(--accent);">₹ {{ balance.total_turnover|floatformat:1 }}</strong></td>
+        </tr>
+        <tr>
+            <td><strong>Current Exchange Balance</strong></td>
+            <td><strong style="font-size: 18px; color: var(--accent);">₹ {{ balance.total_balance_in_exchange|floatformat:1 }}</strong></td>
+        </tr>
+        <tr style="border-top: 2px solid var(--border); background: {% if balance.your_net_profit > 0 %}rgba(34, 197, 94, 0.05){% elif balance.your_net_profit < 0 %}rgba(239, 68, 68, 0.05){% else %}rgba(156, 163, 175, 0.05){% endif %};">
+            <td><strong>🔹 Your Net Profit from this Client ({{ client.name }})</strong></td>
+            <td>
+                <strong style="color: {% if balance.your_net_profit > 0 %}var(--success){% elif balance.your_net_profit < 0 %}var(--danger){% else %}#6b7280{% endif %}; font-size: 20px; font-weight: 700;">
+                    {% if balance.your_net_profit > 0 %}+{% endif %}₹ {{ balance.your_net_profit|floatformat:2 }}
+                </strong>
+                <div style="font-size: 12px; color: #6b7280; margin-top: 4px; font-weight: normal;">
+                    ({{ balance.my_share_pct|floatformat:1 }}% of net change)
+                </div>
+            </td>
+        </tr>
+        <tr style="border-top: 2px solid var(--border);">
+            <td><strong>Client Profit/Loss</strong></td>
+            <td>
+                <strong style="color: {% if balance.is_profit %}var(--success){% else %}var(--danger){% endif %}; font-size: 18px;">
+                    {% if balance.is_profit %}+{% endif %}₹ {{ balance.client_profit_loss|floatformat:1 }}
+                </strong>
+                <span style="color: {% if balance.is_profit %}var(--success){% else %}var(--danger){% endif %}; margin-left: 8px;">
+                    {% if balance.is_profit %}(Profit){% else %}(Loss){% endif %}
+                </span>
+            </td>
+        </tr>
+        {% if balance.is_profit %}
+        <tr>
+            <td>Amount Payable to Client</td>
+            <td style="color: var(--danger);"><strong>₹ {{ balance.client_profit|default:balance.client_profit_loss|floatformat:1 }}</strong></td>
+        </tr>
+        {% else %}
+        <tr>
+            <td>Amount Receivable from Client</td>
+            <td style="color: var(--success);"><strong>₹ {{ balance.admin_earns|default:balance.admin_profit|floatformat:1 }}</strong></td>
+        </tr>
+        {% if client_type == 'company' %}
+        <tr>
+            <td>Company Earns</td>
+            <td>₹ {{ balance.company_earns|default:balance.company_share_profit|floatformat:1 }}</td>
+        </tr>
+        {% endif %}
+        {% endif %}
+        {% if balance.pending_amount != 0 %}
+        <tr style="border-top: 2px solid var(--border); background: rgba(239, 68, 68, 0.05);">
+            <td><strong>Unpaid Amount (Pending)</strong></td>
+            <td><strong style="color: var(--danger); font-size: 18px;">₹ {{ balance.pending_amount|floatformat:1 }}</strong></td>
+        </tr>
+        {% endif %}
+        </tbody>
+    </table>
+</div>
+
+{% endfor %}
+
+{% if exchange_balances|length == 0 %}
+<div class="table-wrapper">
+    <div style="padding: 40px; text-align: center; color: var(--muted);">
+        No exchanges configured for this client yet.
+    </div>
+</div>
+{% endif %}
+
+<!-- All Transactions Section -->
+{% if all_transactions %}
+<div id="transactions-section" style="background: var(--bg-content); border-radius: 8px; padding: 0; border: 1px solid var(--border); margin-bottom: 24px; overflow: hidden; scroll-margin-top: 20px;">
+    <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); background: var(--bg-content);">
+        <h2 style="font-size: 18px; font-weight: 600; margin: 0;">
+            Last 3 Transactions
+            {% if selected_exchange_name %}
+                - {{ selected_exchange_name }}
+            {% endif %}
+        </h2>
+    </div>
+    <div style="padding: 20px;">
+        <div class="table-wrapper" style="border: none; box-shadow: none;">
+            <table>
+                <thead>
+                <tr>
+                    <th>Date</th>
+                    {% if not selected_exchange_id %}
+                    <th>Exchange</th>
+                    {% endif %}
+                    <th>Type</th>
+                    <th>Amount</th>
+                    <th>Your Share</th>
+                    <th>Client Share</th>
+                    {% if client_type == 'company' %}
+                    <th>Company Share</th>
+                    {% endif %}
+                    <th>Recorded Balance</th>
+                    <th>Note</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for tx in all_transactions|slice:":3" %}
+                    <tr>
+                        <td><strong>{{ tx.date|date:"M d, Y" }}</strong></td>
+                        {% if not selected_exchange_id %}
+                        <td>{{ tx.client_exchange.exchange.name }}</td>
+                        {% endif %}
+                        <td>
+                            {% if tx.transaction_type == 'PROFIT' %}
+                                <span class="badge badge-success">{{ tx.get_transaction_type_display }}</span>
+                            {% elif tx.transaction_type == 'LOSS' %}
+                                <span class="badge" style="background: #fee2e2; color: var(--danger);">{{ tx.get_transaction_type_display }}</span>
+                            {% elif tx.transaction_type == 'FUNDING' %}
+                                <span class="badge" style="background: #dbeafe; color: #1e40af;">{{ tx.get_transaction_type_display }}</span>
+                            {% else %}
+                                <span class="badge badge-muted">{{ tx.get_transaction_type_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td><strong>₹ {{ tx.amount|floatformat:1 }}</strong></td>
+                        <td>₹ {{ tx.your_share_amount|floatformat:1 }}</td>
+                        <td>₹ {{ tx.client_share_amount|floatformat:1 }}</td>
+                        {% if client_type == 'company' %}
+                        <td>₹ {{ tx.company_share_amount|floatformat:1 }}</td>
+                        {% endif %}
+                        <td>
+                            {% if tx.recorded_balance %}
+                                <strong style="color: var(--accent);">₹ {{ tx.recorded_balance.remaining_balance|floatformat:1 }}</strong></td>
+                                {% if tx.recorded_balance.extra_adjustment %}
+                                    <span style="color: var(--success); font-size: 12px;">(+ ₹ {{ tx.recorded_balance.extra_adjustment|floatformat:1 }})</span>
+                                {% endif %}
+                            {% else %}
+                                <span style="color: var(--muted);">—</span>
+                            {% endif %}
+                        </td>
+                        <td style="color: var(--muted); font-size: 13px;">{{ tx.note|default:"—"|truncatewords:10 }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+function filterByExchange(clientExchangeId) {
+    if (!clientExchangeId) {
+        window.location.href = "{% url 'my_clients:balance' client.pk %}";
+    } else {
+        window.location.href = "{% url 'my_clients:balance' client.pk %}?exchange=" + clientExchangeId;
+    }
+}
+
+function loadExchangeBalanceData(clientExchangeId) {
+    if (!clientExchangeId) {
+        document.getElementById('balance-date').value = '{{ today|date:"Y-m-d" }}';
+        document.getElementById('balance-amount').value = '';
+        document.getElementById('balance-note').value = '';
+        document.getElementById('balance-loading').style.display = 'none';
+        document.getElementById('calculated-balance-hint').style.display = 'none';
+        document.getElementById('funding-hint').style.display = 'none';
+        return;
+    }
+    
+    const loadingDiv = document.getElementById('balance-loading');
+    const dateInput = document.getElementById('balance-date');
+    const amountInput = document.getElementById('balance-amount');
+    const noteInput = document.getElementById('balance-note');
+    const hintDiv = document.getElementById('calculated-balance-hint');
+    
+    loadingDiv.style.display = 'block';
+    
+    fetch(`{% url 'my_clients:get_latest_balance' client.pk %}?client_exchange_id=${clientExchangeId}`)
+        .then(response => response.json())
+        .then(data => {
+            loadingDiv.style.display = 'none';
+            
+            if (data.success) {
+                dateInput.value = data.date;
+                amountInput.value = data.remaining_balance;
+                // Only populate note if editing an existing balance, otherwise keep it empty for new records
+                {% if not edit_balance %}
+                noteInput.value = '';
+                {% else %}
+                noteInput.value = data.note || '';
+                {% endif %}
+                
+                const fundingHintDiv = document.getElementById('funding-hint');
+                
+                // Show calculated balance hint
+                if (data.has_recorded_balance && data.calculated_balance !== data.remaining_balance) {
+                    hintDiv.textContent = `Calculated balance: ₹ ${parseFloat(data.calculated_balance).toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1})}`;
+                    hintDiv.style.display = 'block';
+                } else if (!data.has_recorded_balance) {
+                    hintDiv.textContent = `Calculated balance: ₹ ${parseFloat(data.calculated_balance).toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1})}`;
+                    hintDiv.style.display = 'block';
+                } else {
+                    hintDiv.style.display = 'none';
+                }
+                
+                // Show funding hint
+                if (data.total_funding && parseFloat(data.total_funding) > 0) {
+                    fundingHintDiv.textContent = `Funding: +₹${parseFloat(data.total_funding).toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1})}`;
+                    fundingHintDiv.style.display = 'block';
+                } else {
+                    fundingHintDiv.style.display = 'none';
+                }
+            } else {
+                hintDiv.textContent = 'Error loading balance data';
+                hintDiv.style.color = 'var(--danger)';
+                hintDiv.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            loadingDiv.style.display = 'none';
+            hintDiv.textContent = 'Error loading balance data';
+            hintDiv.style.color = 'var(--danger)';
+            hintDiv.style.display = 'block';
+            console.error('Error:', error);
+        });
+}
+
+{% if selected_exchange_id %}
+document.addEventListener('DOMContentLoaded', function() {
+    const select = document.getElementById('form-exchange-select');
+    if (select && select.value) {
+        loadExchangeBalanceData(select.value);
+    }
+});
+{% endif %}
+</script>
+{% endblock %}

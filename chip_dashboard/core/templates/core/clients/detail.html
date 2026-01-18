@@ -1,0 +1,119 @@
+{% extends "core/base.html" %}
+{% load math_filters %}
+
+{% block title %}Client · {{ client.name }}{% endblock %}
+{% block page_title %}{{ client.name }}{% endblock %}
+{% block page_subtitle %}{% if client.code %}Code: {{ client.code }} · {% endif %}Exchanges and account details{% endblock %}
+
+{% block page_actions %}
+<div style="display: flex; gap: 10px; flex-wrap: wrap;">
+    <a href="{% url 'exchange_link' %}?client={{ client.pk }}" class="btn btn-primary">Link Exchange</a>
+    <a href="{% url 'client_list' %}" class="btn">Back to Clients</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Client Info Cards -->
+<div class="card-grid" style="margin-bottom: 24px;">
+    <div class="card">
+        <div class="card-title">Client Type</div>
+        <div class="card-value">
+            {% if client.is_company_client %}
+                <span class="badge" style="background: #dbeafe; color: #1e40af;">Company Client</span>
+            {% else %}
+                <span class="badge" style="background: #f3e8ff; color: #7c3aed;">My Client</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-title">Linked Exchanges</div>
+        <div class="card-value">{{ accounts|length }}</div>
+    </div>
+    <div class="card">
+        <div class="card-title">Total Funding</div>
+        <div class="card-value">{{ total_funding|currency_inr }}</div>
+    </div>
+    <div class="card">
+        <div class="card-title">Total Exchange Balance</div>
+        <div class="card-value">{{ total_exchange_balance|currency_inr }}</div>
+    </div>
+    <div class="card">
+        <div class="card-title">Total Client PnL</div>
+        <div class="card-value {% if total_client_pnl > 0 %}positive{% elif total_client_pnl < 0 %}negative{% endif %}">
+            {{ total_client_pnl|currency_inr }}
+        </div>
+    </div>
+</div>
+
+{% if client.referred_by %}
+<div style="background: var(--bg-content); border-radius: 8px; padding: 16px; border: 1px solid var(--border); margin-bottom: 24px;">
+    <div style="font-size: 14px; color: var(--muted);">Referred By: <strong>{{ client.referred_by }}</strong></div>
+</div>
+{% endif %}
+
+<!-- Exchanges Section -->
+{% if accounts %}
+<div style="background: var(--bg-content); border-radius: 8px; padding: 0; border: 1px solid var(--border); margin-bottom: 24px; overflow: hidden;">
+    <div class="table-header">
+        <span>Exchange Accounts</span>
+        <span class="pill">Total: {{ accounts|length }}</span>
+    </div>
+    <div class="table-wrapper" style="border: none; box-shadow: none;">
+        <table>
+            <thead>
+            <tr>
+                <th>Exchange</th>
+                <th>Funding</th>
+                <th>Exchange Balance</th>
+                <th>Client PnL</th>
+                <th>My Share</th>
+                <th>My %</th>
+                <th>Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for account in accounts %}
+                {% with pnl=account.compute_client_pnl share=account.compute_my_share %}
+                <tr>
+                    <td>
+                        <a href="{% url 'exchange_account_detail' account.pk %}" style="color: var(--accent); text-decoration: none; font-weight: 500;">
+                            {{ account.exchange.name }}{% if account.exchange.code %} ({{ account.exchange.code }}){% endif %}
+                        </a>
+                    </td>
+                    <td>{{ account.funding|currency_inr }}</td>
+                    <td>{{ account.exchange_balance|currency_inr }}</td>
+                    <td>
+                        {% if pnl == 0 %}
+                            <span style="color: var(--muted);">N.A</span>
+                        {% else %}
+                            <span class="{% if pnl > 0 %}positive{% else %}negative{% endif %}">
+                                {{ pnl|currency_inr }}
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if pnl == 0 %}
+                            <span style="color: var(--muted);">N.A</span>
+                        {% else %}
+                            {{ share|currency_inr }}
+                        {% endif %}
+                    </td>
+                    <td>{{ account.my_percentage }}%</td>
+                    <td>
+                        <a href="{% url 'exchange_account_detail' account.pk %}" class="btn btn-sm">View</a>
+                    </td>
+                </tr>
+                {% endwith %}
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div style="background: var(--bg-content); border-radius: 8px; padding: 40px; border: 1px solid var(--border); text-align: center; color: var(--muted);">
+    <div style="font-size: 16px; margin-bottom: 8px;">No Exchange Accounts</div>
+    <div style="font-size: 14px; margin-bottom: 16px;">Link an exchange to get started</div>
+    <a href="{% url 'exchange_link' %}?client={{ client.pk }}" class="btn btn-primary">Link Exchange</a>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,1212 @@
+{% extends "core/base.html" %}
+{% load math_filters %}
+
+{% block title %}Reports · Transaction Hub{% endblock %}
+{% block page_title %}Reports & Analytics{% endblock %}
+{% block page_subtitle %}Comprehensive insights into your business performance{% endblock %}
+
+{% block extra_head %}
+<!-- Chart.js Library -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<style>
+    .reports-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    
+    /* Basic Stat Cards */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    
+    .stat-box {
+        background: #ffffff;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 20px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+    
+    .stat-box.profit {
+        border-left: 4px solid #28a745;
+    }
+    
+    .stat-box.loss {
+        border-left: 4px solid #dc3545;
+    }
+    
+    .stat-box.turnover {
+        border-left: 4px solid #007bff;
+    }
+    
+    .stat-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #666;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+    
+    .stat-value {
+        font-size: 28px;
+        font-weight: 700;
+        color: #333;
+        margin-bottom: 4px;
+    }
+    
+    .stat-note {
+        font-size: 12px;
+        color: #999;
+    }
+    
+    /* Basic Tabs */
+    .tabs-simple {
+        display: flex;
+        gap: 0;
+        border-bottom: 2px solid #ddd;
+        margin-bottom: 20px;
+    }
+    
+    .tab-simple {
+        padding: 10px 20px;
+        text-decoration: none;
+        color: #666;
+        font-size: 14px;
+        font-weight: 500;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -2px;
+    }
+    
+    .tab-simple:hover {
+        color: #333;
+        background: #f5f5f5;
+    }
+    
+    .tab-simple.active {
+        color: #007bff;
+        border-bottom-color: #007bff;
+    }
+    
+    /* Chart Sections */
+    .chart-section {
+        background: #ffffff;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        position: relative;
+        min-height: 300px;
+    }
+    
+    .chart-header {
+        font-size: 16px;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #ddd;
+    }
+    
+    .chart-section canvas {
+        max-width: 100%;
+        height: auto !important;
+    }
+    
+    .charts-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+    
+    /* Client Filter */
+    .filter-section {
+        margin-bottom: 20px;
+        padding: 16px;
+        background: #f5f5f5;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    
+    .filter-section label {
+        font-size: 14px;
+        font-weight: 500;
+        color: #333;
+    }
+    
+    .filter-section select {
+        padding: 8px 12px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 14px;
+        background: #ffffff;
+        min-width: 250px;
+        cursor: pointer;
+    }
+    
+    .filter-section select:focus {
+        outline: none;
+        border-color: #007bff;
+    }
+    
+    .btn-compact {
+        padding: 8px 16px;
+        font-size: 13px;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+        background: #ffffff;
+        color: #333;
+        cursor: pointer;
+        font-weight: 500;
+        text-decoration: none;
+    }
+    
+    .btn-compact:hover {
+        background: #f5f5f5;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .charts-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    /* Fixed center overlay dropdown - zero movement */
+    .client-dropdown {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        max-height: 400px;
+        overflow-y: auto;
+        z-index: 10000;
+        background: var(--bg-content);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        min-width: 300px;
+        max-width: 500px;
+        display: none;
+    }
+    
+    .client-dropdown.active {
+        display: block;
+    }
+    
+    .dropdown-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.3);
+        z-index: 9999;
+        display: none;
+    }
+    
+    .dropdown-overlay.active {
+        display: block;
+    }
+    
+    .dropdown-header {
+        padding: 16px;
+        border-bottom: 1px solid var(--border);
+        font-weight: 600;
+        font-size: 16px;
+        color: var(--text);
+    }
+    
+    .dropdown-options {
+        max-height: 320px;
+        overflow-y: auto;
+    }
+    
+    .dropdown-option {
+        padding: 12px 16px;
+        cursor: pointer;
+        transition: background 0.12s ease;
+        color: var(--text);
+        font-size: 15px;
+    }
+    
+    .dropdown-option:hover {
+        background: var(--accent-soft);
+    }
+    
+    .dropdown-option.selected {
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 500;
+    }
+    
+    .dropdown-trigger {
+        cursor: pointer;
+        position: relative;
+    }
+</style>
+
+<!-- Dropdown Overlay -->
+<div class="dropdown-overlay" id="dropdownOverlay" onclick="closeDropdowns()"></div>
+
+<!-- Client Dropdown Modal -->
+<div class="client-dropdown" id="clientDropdown">
+    <div class="dropdown-header">Select Client</div>
+    <div class="dropdown-options" id="clientDropdownOptions">
+        <div class="dropdown-option {% if not selected_client_id %}selected{% endif %}" onclick="selectClient('', 'All Clients')">
+            All Clients
+        </div>
+        {% for client in all_clients %}
+        <div class="dropdown-option {% if selected_client_id == client.id %}selected{% endif %}" onclick="selectClient('{{ client.id }}', '{{ client.name }}{% if client.code %} ({{ client.code }}){% endif %}')">
+            {{ client.name }}{% if client.code %} ({{ client.code }}){% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Exchange Dropdown Modal -->
+<div class="client-dropdown" id="exchangeDropdown">
+    <div class="dropdown-header">Select Exchange</div>
+    <div class="dropdown-options" id="exchangeDropdownOptions">
+        <div class="dropdown-option {% if not selected_exchange_id %}selected{% endif %}" onclick="selectExchange('', 'All Exchanges')">
+            All Exchanges
+        </div>
+        {% for exchange in all_exchanges %}
+        <div class="dropdown-option {% if selected_exchange_id == exchange.id %}selected{% endif %}" onclick="selectExchange('{{ exchange.id }}', '{{ exchange.name }}{% if exchange.code %} ({{ exchange.code }}){% endif %}')">
+            {{ exchange.name }}{% if exchange.code %} ({{ exchange.code }}){% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="reports-wrapper">
+    <!-- Client Filter, Exchange Filter and Month Selection -->
+    <div class="filter-section">
+        <label>Filter by Client:</label>
+        <div class="dropdown-trigger" id="clientTrigger" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; background: #ffffff; min-width: 250px; cursor: pointer; display: flex; align-items: center; justify-content: space-between;" onclick="openClientDropdown()">
+            <span id="clientDisplay">{% if selected_client_id %}{% for client in all_clients %}{% if selected_client_id == client.id %}{{ client.name }}{% if client.code %} ({{ client.code }}){% endif %}{% endif %}{% endfor %}{% else %}All Clients{% endif %}</span>
+            <span style="color: #999;">▼</span>
+        </div>
+        <select id="clientSelect" style="display: none;">
+            <option value="">All Clients</option>
+            {% for client in all_clients %}
+            <option value="{{ client.id }}" {% if selected_client_id == client.id %}selected{% endif %}>{{ client.name }}{% if client.code %} ({{ client.code }}){% endif %}</option>
+            {% endfor %}
+        </select>
+        
+        <label style="margin-left: 20px;">Filter by Exchange:</label>
+        <div class="dropdown-trigger" id="exchangeTrigger" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; background: #ffffff; min-width: 250px; cursor: pointer; display: flex; align-items: center; justify-content: space-between;" onclick="openExchangeDropdown()">
+            <span id="exchangeDisplay">{% if selected_exchange_id %}{% for exchange in all_exchanges %}{% if selected_exchange_id == exchange.id %}{{ exchange.name }}{% if exchange.code %} ({{ exchange.code }}){% endif %}{% endif %}{% endfor %}{% else %}All Exchanges{% endif %}</span>
+            <span style="color: #999;">▼</span>
+        </div>
+        <select id="exchangeSelect" style="display: none;">
+            <option value="">All Exchanges</option>
+            {% for exchange in all_exchanges %}
+            <option value="{{ exchange.id }}" {% if selected_exchange_id == exchange.id %}selected{% endif %}>{{ exchange.name }}{% if exchange.code %} ({{ exchange.code }}){% endif %}</option>
+            {% endfor %}
+        </select>
+        
+    {% if selected_client_id or selected_exchange_id %}
+        <a href="?report_type={{ report_type }}{% if client_type_filter %}&client_type={{ client_type_filter }}{% endif %}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}{% if selected_month %}&month={{ selected_month }}{% endif %}" class="btn-compact">Clear Filters</a>
+    {% endif %}
+    {% if not all_clients %}
+        <span style="font-size: 13px; color: #64748b; font-style: italic;">No clients available</span>
+    {% endif %}
+    
+    <label style="margin-left: 20px;">Select Month:</label>
+    <input type="month" id="monthSelector" name="month" value="{{ selected_month|default:'' }}" max="{{ today|date:'Y-m' }}" onchange="changeMonth(this.value)" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; background: #ffffff; min-width: 150px; cursor: pointer;">
+</div>
+
+<!-- Report Type Tabs -->
+<div class="tabs-simple">
+    <a href="?report_type=daily{% if client_type_filter %}&client_type={{ client_type_filter }}{% endif %}{% if selected_client_id %}&client={{ selected_client_id }}{% endif %}{% if selected_exchange_id %}&exchange={{ selected_exchange_id }}{% endif %}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}{% if selected_month %}&month={{ selected_month }}{% endif %}" onclick="return changeReportType('daily', event)" class="tab-simple {% if report_type == 'daily' %}active{% endif %}">
+        Daily
+    </a>
+    <a href="?report_type=weekly{% if client_type_filter %}&client_type={{ client_type_filter }}{% endif %}{% if selected_client_id %}&client={{ selected_client_id }}{% endif %}{% if selected_exchange_id %}&exchange={{ selected_exchange_id }}{% endif %}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}{% if selected_month %}&month={{ selected_month }}{% endif %}" onclick="return changeReportType('weekly', event)" class="tab-simple {% if report_type == 'weekly' %}active{% endif %}">
+        Weekly
+    </a>
+    <a href="?report_type=monthly{% if client_type_filter %}&client_type={{ client_type_filter }}{% endif %}{% if selected_client_id %}&client={{ selected_client_id }}{% endif %}{% if selected_exchange_id %}&exchange={{ selected_exchange_id }}{% endif %}{% if start_date_str %}&start_date={{ start_date_str }}{% endif %}{% if end_date_str %}&end_date={{ end_date_str }}{% endif %}{% if selected_month %}&month={{ selected_month }}{% endif %}" onclick="return changeReportType('monthly', event)" class="tab-simple {% if report_type == 'monthly' %}active{% endif %}">
+        Monthly
+    </a>
+</div>
+
+<!-- Summary Stats -->
+<div class="stats-grid">
+        <div class="stat-box turnover">
+        <div class="stat-label">Total Turnover</div>
+        <div class="stat-value">{{ total_turnover|default:0|currency_inr }}</div>
+        <div class="stat-note">All-time transaction volume</div>
+    </div>
+        <div class="stat-box profit">
+        <div class="stat-label">Your Total Profit</div>
+        <div class="stat-value {% if your_total_profit >= 0 %}positive{% else %}negative{% endif %}">{{ your_total_profit|default:0|currency_inr }}</div>
+        <div class="stat-note">
+            Cash-flow based: Money received from clients ({{ your_total_income_from_clients|default:0|currency_inr }}) 
+            - Money paid to clients ({{ your_total_paid_to_clients|default:0|currency_inr }})
+        </div>
+    </div>
+    <div class="stat-box profit">
+        <div class="stat-label">My Profit</div>
+        <div class="stat-value {% if my_profit >= 0 %}positive{% else %}negative{% endif %}">{{ my_profit|default:0|currency_inr }}</div>
+        <div class="stat-note">Your share from settlements (split from ClientExchangeReportConfig)</div>
+    </div>
+    <div class="stat-box profit">
+        <div class="stat-label">Company Profit</div>
+        <div class="stat-value {% if friend_profit >= 0 %}positive{% else %}negative{% endif %}">{{ friend_profit|default:0|currency_inr }}</div>
+        <div class="stat-note">Company share from settlements (split from ClientExchangeReportConfig)</div>
+    </div>
+</div>
+
+{% if report_type == 'daily' %}
+<!-- Daily Report Section -->
+    <div class="chart-section">
+    <div class="chart-header">Daily Trends (Last 30 Days)</div>
+    <div style="position: relative; height: 400px;">
+        <canvas id="dailyTrendsChart"></canvas>
+    </div>
+</div>
+
+<div class="charts-grid">
+    <div class="chart-section">
+        <div class="chart-header">Transaction Type Breakdown</div>
+        <div style="position: relative; height: 320px;">
+            <canvas id="typeBreakdownChart"></canvas>
+        </div>
+    </div>
+    
+    {% if client_labels %}
+    <div class="chart-section">
+        <div class="chart-header">Top Clients by Profit (Last 30 Days)</div>
+        <div style="position: relative; height: 320px;">
+            <canvas id="topClientsChart"></canvas>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% elif report_type == 'weekly' %}
+<!-- Weekly Report Section -->
+    <div class="chart-section">
+    <div class="chart-header">Weekly Trends (Last 4 Weeks)</div>
+    <div style="position: relative; height: 400px;">
+        <canvas id="weeklyTrendsChart"></canvas>
+        <div id="weeklyChartPlaceholder" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #999;">
+            <div style="font-size: 16px; margin-bottom: 8px;">No data available</div>
+            <div style="font-size: 14px;">Weekly trends will appear here once you have transaction data</div>
+        </div>
+    </div>
+</div>
+
+<div class="charts-grid">
+    <div class="chart-section">
+        <div class="chart-header">Transaction Type Breakdown</div>
+        <div style="position: relative; height: 320px;">
+            <canvas id="typeBreakdownChart"></canvas>
+            <div id="typeChartPlaceholder" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #999;">
+                <div style="font-size: 16px; margin-bottom: 8px;">No data available</div>
+                <div style="font-size: 14px;">Transaction breakdown will appear here</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="chart-section">
+        <div class="chart-header">Daily Trends (Last 30 Days)</div>
+        <div style="position: relative; height: 320px;">
+            <canvas id="dailyTrendsChart"></canvas>
+            <div id="dailyChartPlaceholder" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #999;">
+                <div style="font-size: 16px; margin-bottom: 8px;">No data available</div>
+                <div style="font-size: 14px;">Daily trends will appear here</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% elif report_type == 'monthly' %}
+<!-- Monthly Report Section -->
+    <div class="chart-section">
+    <div class="chart-header">Monthly Trends (Last 6 Months)</div>
+    <div style="position: relative; height: 400px;">
+        <canvas id="monthlyTrendsChart"></canvas>
+        <div id="monthlyChartPlaceholder" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #999;">
+            <div style="font-size: 16px; margin-bottom: 8px;">No data available</div>
+            <div style="font-size: 14px;">Monthly trends will appear here once you have transaction data</div>
+        </div>
+    </div>
+</div>
+
+<div class="charts-grid">
+    <div class="chart-section">
+        <div class="chart-header">Transaction Type Breakdown</div>
+        <div style="position: relative; height: 320px;">
+            <canvas id="typeBreakdownChart"></canvas>
+            <div id="typeChartPlaceholder" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #999;">
+                <div style="font-size: 16px; margin-bottom: 8px;">No data available</div>
+                <div style="font-size: 14px;">Transaction breakdown will appear here</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="chart-section">
+        <div class="chart-header">Weekly Trends (Last 4 Weeks)</div>
+        <div style="position: relative; height: 320px;">
+            <canvas id="weeklyTrendsChart"></canvas>
+            <div id="weeklyChartPlaceholder" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #999;">
+                <div style="font-size: 16px; margin-bottom: 8px;">No data available</div>
+                <div style="font-size: 14px;">Weekly trends will appear here</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+</div>
+
+<script>
+// Disable automatic scroll restoration
+if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+}
+
+// Preserve scroll position when changing report type
+function changeReportType(type, event) {
+    event.preventDefault();
+    const currentScrollY = window.scrollY || window.pageYOffset;
+    const url = new URL(window.location);
+    
+    const startDate = url.searchParams.get('start_date');
+    const endDate = url.searchParams.get('end_date');
+    const dateParam = url.searchParams.get('date');
+    const clientType = url.searchParams.get('client_type');
+    const clientId = url.searchParams.get('client');
+    const exchangeId = url.searchParams.get('exchange');
+    const month = url.searchParams.get('month');
+    
+    url.searchParams.set('report_type', type);
+    if (startDate) url.searchParams.set('start_date', startDate);
+    if (endDate) url.searchParams.set('end_date', endDate);
+    if (dateParam) url.searchParams.set('date', dateParam);
+    if (clientType) url.searchParams.set('client_type', clientType);
+    if (clientId) url.searchParams.set('client', clientId);
+    if (exchangeId) url.searchParams.set('exchange', exchangeId);
+    if (month) url.searchParams.set('month', month);
+    
+    sessionStorage.setItem('reportScrollPosition', currentScrollY);
+    window.location.href = url.toString();
+    return false;
+}
+
+function openClientDropdown() {
+    document.getElementById('dropdownOverlay').classList.add('active');
+    document.getElementById('clientDropdown').classList.add('active');
+}
+
+function openExchangeDropdown() {
+    document.getElementById('dropdownOverlay').classList.add('active');
+    document.getElementById('exchangeDropdown').classList.add('active');
+}
+
+function closeDropdowns() {
+    document.getElementById('dropdownOverlay').classList.remove('active');
+    document.getElementById('clientDropdown').classList.remove('active');
+    document.getElementById('exchangeDropdown').classList.remove('active');
+}
+
+function selectClient(clientId, displayText) {
+    document.getElementById('clientSelect').value = clientId;
+    document.getElementById('clientDisplay').textContent = displayText;
+    closeDropdowns();
+    // Auto-filter immediately
+    changeClient(clientId);
+}
+
+function selectExchange(exchangeId, displayText) {
+    document.getElementById('exchangeSelect').value = exchangeId;
+    document.getElementById('exchangeDisplay').textContent = displayText;
+    closeDropdowns();
+    // Auto-filter immediately
+    changeExchange(exchangeId);
+}
+
+function changeClient(clientId) {
+    const currentScrollY = window.scrollY || window.pageYOffset;
+    const url = new URL(window.location);
+    
+    const startDate = url.searchParams.get('start_date');
+    const endDate = url.searchParams.get('end_date');
+    const dateParam = url.searchParams.get('date');
+    const reportType = url.searchParams.get('report_type') || 'monthly';
+    const clientType = url.searchParams.get('client_type');
+    const month = url.searchParams.get('month');
+    const exchangeId = url.searchParams.get('exchange');
+    
+    url.searchParams.set('report_type', reportType);
+    if (startDate) url.searchParams.set('start_date', startDate);
+    if (endDate) url.searchParams.set('end_date', endDate);
+    if (dateParam) url.searchParams.set('date', dateParam);
+    if (clientType) url.searchParams.set('client_type', clientType);
+    if (month) url.searchParams.set('month', month);
+    if (exchangeId) url.searchParams.set('exchange', exchangeId);
+    if (clientId) {
+        url.searchParams.set('client', clientId);
+    } else {
+        url.searchParams.delete('client');
+    }
+    
+    sessionStorage.setItem('reportScrollPosition', currentScrollY);
+    window.location.href = url.toString();
+}
+
+function changeExchange(exchangeId) {
+    const currentScrollY = window.scrollY || window.pageYOffset;
+    const url = new URL(window.location);
+    
+    const startDate = url.searchParams.get('start_date');
+    const endDate = url.searchParams.get('end_date');
+    const dateParam = url.searchParams.get('date');
+    const reportType = url.searchParams.get('report_type') || 'monthly';
+    const clientType = url.searchParams.get('client_type');
+    const month = url.searchParams.get('month');
+    const clientId = url.searchParams.get('client');
+    
+    url.searchParams.set('report_type', reportType);
+    if (startDate) url.searchParams.set('start_date', startDate);
+    if (endDate) url.searchParams.set('end_date', endDate);
+    if (dateParam) url.searchParams.set('date', dateParam);
+    if (clientType) url.searchParams.set('client_type', clientType);
+    if (month) url.searchParams.set('month', month);
+    if (clientId) url.searchParams.set('client', clientId);
+    if (exchangeId) {
+        url.searchParams.set('exchange', exchangeId);
+    } else {
+        url.searchParams.delete('exchange');
+    }
+    
+    sessionStorage.setItem('reportScrollPosition', currentScrollY);
+    window.location.href = url.toString();
+}
+
+// Close dropdown on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeDropdowns();
+    }
+});
+
+function changeMonth(monthValue) {
+    const currentScrollY = window.scrollY || window.pageYOffset;
+    const url = new URL(window.location);
+    
+    const startDate = url.searchParams.get('start_date');
+    const endDate = url.searchParams.get('end_date');
+    const dateParam = url.searchParams.get('date');
+    const reportType = url.searchParams.get('report_type') || 'monthly';
+    const clientType = url.searchParams.get('client_type');
+    const clientId = url.searchParams.get('client');
+    const exchangeId = url.searchParams.get('exchange');
+    
+    url.searchParams.set('report_type', reportType);
+    // Remove time travel params when selecting month
+    url.searchParams.delete('start_date');
+    url.searchParams.delete('end_date');
+    url.searchParams.delete('date');
+    if (clientType) url.searchParams.set('client_type', clientType);
+    if (clientId) url.searchParams.set('client', clientId);
+    if (exchangeId) url.searchParams.set('exchange', exchangeId);
+    if (monthValue) {
+        url.searchParams.set('month', monthValue);
+    } else {
+        url.searchParams.delete('month');
+    }
+    
+    sessionStorage.setItem('reportScrollPosition', currentScrollY);
+    window.location.href = url.toString();
+}
+
+// Restore scroll position
+(function() {
+    const savedScroll = sessionStorage.getItem('reportScrollPosition');
+    if (savedScroll !== null) {
+        const scrollPos = parseInt(savedScroll);
+        window.scrollTo(0, scrollPos);
+        sessionStorage.removeItem('reportScrollPosition');
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                window.scrollTo(0, scrollPos);
+            });
+        }
+        setTimeout(function() {
+            window.scrollTo(0, scrollPos);
+        }, 100);
+    }
+})();
+
+// Initialize all charts
+function initializeCharts() {
+    if (typeof Chart === 'undefined') {
+        console.warn('Chart.js not loaded yet, retrying...');
+        setTimeout(initializeCharts, 100);
+        return;
+    }
+    
+    console.log('Initializing charts...');
+    console.log('Report type:', '{{ report_type }}');
+    console.log('Chart.js version:', typeof Chart !== 'undefined' ? Chart.version : 'NOT LOADED');
+
+    // Basic color palette
+    const colors = {
+        profit: '#28a745',
+        loss: '#dc3545',
+        turnover: '#007bff',
+        funding: '#17a2b8',
+        settlement: '#6c757d',
+        background: {
+            profit: 'rgba(40, 167, 69, 0.1)',
+            loss: 'rgba(220, 53, 69, 0.1)',
+            turnover: 'rgba(0, 123, 255, 0.1)',
+        }
+    };
+
+// Daily Trends Chart
+{% if report_type == 'daily' or report_type == 'weekly' %}
+const dailyChartEl = document.getElementById('dailyTrendsChart');
+const dailyPlaceholder = document.getElementById('dailyChartPlaceholder');
+console.log('Daily chart element found:', dailyChartEl !== null);
+if (dailyChartEl) {
+    try {
+        const dailyCtx = dailyChartEl.getContext('2d');
+        const dailyLabels = {{ daily_labels|safe }} || [];
+        const dailyProfit = {{ daily_profit|safe }} || [];
+        const dailyLoss = {{ daily_loss|safe }} || [];
+        const dailyTurnover = {{ daily_turnover|safe }} || [];
+        
+        // Ensure data is arrays
+        const labels = Array.isArray(dailyLabels) ? dailyLabels : [];
+        const profit = Array.isArray(dailyProfit) ? dailyProfit : [];
+        const loss = Array.isArray(dailyLoss) ? dailyLoss : [];
+        const turnover = Array.isArray(dailyTurnover) ? dailyTurnover : [];
+        
+        // Check if we have any data
+        const hasData = labels.length > 0 && (profit.length > 0 || loss.length > 0 || turnover.length > 0);
+        
+        // Always create chart, even with empty data
+        const chartData = {
+            labels: labels.length > 0 ? labels : ['No Data'],
+            datasets: [
+                {
+                    label: 'Profit',
+                    data: profit.length > 0 ? profit : [0],
+                    borderColor: colors.profit,
+                    backgroundColor: colors.background.profit,
+                    tension: 0.4,
+                    fill: true,
+                    borderWidth: 3,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                },
+                {
+                    label: 'Loss',
+                    data: loss.length > 0 ? loss : [0],
+                    borderColor: colors.loss,
+                    backgroundColor: colors.background.loss,
+                    tension: 0.4,
+                    fill: true,
+                    borderWidth: 3,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                },
+                {
+                    label: 'Turnover',
+                    data: turnover.length > 0 ? turnover : [0],
+                    borderColor: colors.turnover,
+                    backgroundColor: colors.background.turnover,
+                    tension: 0.4,
+                    fill: true,
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    yAxisID: 'y1'
+                }
+            ]
+        };
+        
+        // Show placeholder if no data
+        if (!hasData && dailyPlaceholder) {
+            dailyPlaceholder.style.display = 'block';
+        }
+        
+        console.log('Daily chart data:', chartData);
+        console.log('Creating daily chart...');
+        
+        const dailyChart = new Chart(dailyCtx, {
+        type: 'line',
+                data: chartData,
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'top',
+                labels: {
+                    padding: 15,
+                            font: { size: 13, weight: '600' },
+                            usePointStyle: true
+                }
+            },
+            tooltip: {
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                padding: 12,
+                        titleFont: { size: 14, weight: '600' },
+                        bodyFont: { size: 13 },
+                callbacks: {
+                    label: function(context) {
+                        return context.dataset.label + ': ₹' + context.parsed.y.toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+                    }
+                }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                ticks: {
+                            font: { size: 12 },
+                    callback: function(value) {
+                        return '₹' + value.toLocaleString('en-IN');
+                    }
+                }
+            },
+            y1: {
+                type: 'linear',
+                display: true,
+                position: 'right',
+                beginAtZero: true,
+                        grid: { drawOnChartArea: false },
+                ticks: {
+                            font: { size: 12 },
+                    callback: function(value) {
+                        return '₹' + value.toLocaleString('en-IN');
+                            }
+                    }
+            },
+            x: {
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                        ticks: { font: { size: 12 } }
+                    }
+                }
+            }
+        });
+        console.log('Daily chart created successfully:', dailyChart);
+    } catch (error) {
+        console.error('Error initializing daily chart:', error);
+        console.error('Error details:', error.message, error.stack);
+    }
+} else {
+    console.warn('Daily chart element not found!');
+}
+{% endif %}
+
+// Weekly Trends Chart
+{% if report_type == 'weekly' or report_type == 'monthly' %}
+const weeklyChartEl = document.getElementById('weeklyTrendsChart');
+const weeklyPlaceholder = document.getElementById('weeklyChartPlaceholder');
+console.log('Weekly chart element found:', weeklyChartEl !== null);
+if (weeklyChartEl) {
+    try {
+        const weeklyCtx = weeklyChartEl.getContext('2d');
+        const weeklyLabels = {{ weekly_labels|safe }} || [];
+        const weeklyProfit = {{ weekly_profit|safe }} || [];
+        const weeklyLoss = {{ weekly_loss|safe }} || [];
+        
+        // Ensure data is arrays
+        const labels = Array.isArray(weeklyLabels) ? weeklyLabels : [];
+        const profit = Array.isArray(weeklyProfit) ? weeklyProfit : [];
+        const loss = Array.isArray(weeklyLoss) ? weeklyLoss : [];
+        
+        // Check if we have any data
+        const hasData = labels.length > 0 && (profit.length > 0 || loss.length > 0);
+        
+        // Always create chart, even with empty data
+        const chartData = {
+            labels: labels.length > 0 ? labels : ['No Data'],
+            datasets: [
+                {
+                    label: 'Profit',
+                    data: profit.length > 0 ? profit : [0],
+                    backgroundColor: colors.profit + 'CC',
+                    borderColor: colors.profit,
+                    borderWidth: 2,
+                    borderRadius: 6
+                },
+                {
+                    label: 'Loss',
+                    data: loss.length > 0 ? loss : [0],
+                    backgroundColor: colors.loss + 'CC',
+                    borderColor: colors.loss,
+                    borderWidth: 2,
+                    borderRadius: 6
+                }
+            ]
+        };
+        
+        // Show placeholder if no data
+        if (!hasData && weeklyPlaceholder) {
+            weeklyPlaceholder.style.display = 'block';
+        }
+        
+        console.log('Weekly chart data:', chartData);
+        console.log('Creating weekly chart...');
+        
+        const weeklyChart = new Chart(weeklyCtx, {
+        type: 'bar',
+                data: chartData,
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'top',
+                labels: {
+                    padding: 15,
+                            font: { size: 13, weight: '600' },
+                            usePointStyle: true
+                }
+            },
+            tooltip: {
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                padding: 12,
+                callbacks: {
+                    label: function(context) {
+                        return context.dataset.label + ': ₹' + context.parsed.y.toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+                    }
+                }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                ticks: {
+                            font: { size: 12 },
+                    callback: function(value) {
+                        return '₹' + value.toLocaleString('en-IN');
+                    }
+                }
+            },
+            x: {
+                        grid: { display: false },
+                        ticks: { font: { size: 12 } }
+                    }
+                }
+            }
+        });
+        console.log('Weekly chart created successfully:', weeklyChart);
+    } catch (error) {
+        console.error('Error initializing weekly chart:', error);
+        console.error('Error details:', error.message, error.stack);
+    }
+} else {
+    console.warn('Weekly chart element not found!');
+}
+{% endif %}
+
+// Transaction Type Breakdown Chart
+{% if report_type == 'daily' or report_type == 'weekly' or report_type == 'monthly' %}
+const typeChartEl = document.getElementById('typeBreakdownChart');
+const typePlaceholder = document.getElementById('typeChartPlaceholder');
+console.log('Type breakdown chart element found:', typeChartEl !== null);
+if (typeChartEl) {
+    try {
+        const typeCtx = typeChartEl.getContext('2d');
+        const typeColors = {{ type_colors|safe }} || [];
+        const typeLabels = {{ type_labels|safe }} || [];
+        const typeAmounts = {{ type_amounts|safe }} || [];
+        
+        // Ensure data is arrays
+        const labels = Array.isArray(typeLabels) ? typeLabels : [];
+        const amounts = Array.isArray(typeAmounts) ? typeAmounts : [];
+        
+        // Check if we have data
+        const hasData = labels.length > 0 && amounts.length > 0 && amounts.some(a => a > 0);
+        
+        // Always create chart, even with empty data
+        const chartLabels = labels.length > 0 ? labels : ['No Data'];
+        const chartAmounts = amounts.length > 0 ? amounts : [1];
+        
+        // Update colors to modern palette
+        const modernColors = chartLabels.map((label, i) => {
+            if (label === 'Profit') return colors.profit;
+            if (label === 'Loss') return colors.loss;
+            if (label === 'Funding') return colors.funding;
+            if (label === 'Settlement') return colors.settlement;
+            return typeColors[i] || '#6c757d';
+        });
+        
+        // Show placeholder if no data
+        if (!hasData && typePlaceholder) {
+            typePlaceholder.style.display = 'block';
+        }
+        
+        console.log('Type breakdown chart data:', { labels: chartLabels, amounts: chartAmounts });
+        console.log('Creating type breakdown chart...');
+        const typeChart = new Chart(typeCtx, {
+            type: 'doughnut',
+            data: {
+                labels: chartLabels,
+                datasets: [{
+                    data: chartAmounts,
+                    backgroundColor: modernColors,
+            borderWidth: 3,
+            borderColor: '#ffffff'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: {
+                    padding: 15,
+                            font: { size: 13, weight: '600' },
+                            usePointStyle: true
+                }
+            },
+            tooltip: {
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                padding: 12,
+                callbacks: {
+                    label: function(context) {
+                        const label = context.label || '';
+                        const value = context.parsed || 0;
+                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                        const percentage = ((value / total) * 100).toFixed(1);
+                        return label + ': ₹' + value.toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + ' (' + percentage + '%)';
+                    }
+                }
+            }
+        }
+    }
+    });
+    console.log('Type breakdown chart created successfully:', typeChart);
+    } catch (error) {
+        console.error('Error initializing type breakdown chart:', error);
+        console.error('Error details:', error.message, error.stack);
+    }
+} else {
+    console.warn('Type breakdown chart element not found!');
+}
+{% endif %}
+
+// Monthly Trends Chart
+{% if report_type == 'monthly' %}
+const monthlyChartEl = document.getElementById('monthlyTrendsChart');
+const monthlyPlaceholder = document.getElementById('monthlyChartPlaceholder');
+console.log('Monthly chart element found:', monthlyChartEl !== null);
+if (monthlyChartEl) {
+    try {
+        const monthlyCtx = monthlyChartEl.getContext('2d');
+        const monthlyLabels = {{ monthly_labels|safe }} || [];
+        const monthlyProfit = {{ monthly_profit|safe }} || [];
+        const monthlyLoss = {{ monthly_loss|safe }} || [];
+        
+        console.log('Monthly chart data:', { labels: monthlyLabels, profit: monthlyProfit, loss: monthlyLoss });
+        
+        // Ensure data is arrays
+        const labels = Array.isArray(monthlyLabels) ? monthlyLabels : [];
+        const profit = Array.isArray(monthlyProfit) ? monthlyProfit : [];
+        const loss = Array.isArray(monthlyLoss) ? monthlyLoss : [];
+        
+        // Check if we have any data
+        const hasData = labels.length > 0 && (profit.length > 0 || loss.length > 0);
+        
+        // Always create chart, even with empty data
+        const chartData = {
+            labels: labels.length > 0 ? labels : ['No Data'],
+            datasets: [
+                {
+                    label: 'Profit',
+                    data: profit.length > 0 ? profit : [0],
+                    backgroundColor: colors.profit + 'CC',
+                    borderColor: colors.profit,
+                    borderWidth: 2,
+                    borderRadius: 6
+                },
+                {
+                    label: 'Loss',
+                    data: loss.length > 0 ? loss : [0],
+                    backgroundColor: colors.loss + 'CC',
+                    borderColor: colors.loss,
+                    borderWidth: 2,
+                    borderRadius: 6
+                }
+            ]
+        };
+        
+        // Show placeholder if no data
+        if (!hasData && monthlyPlaceholder) {
+            monthlyPlaceholder.style.display = 'block';
+        }
+        
+        console.log('Creating monthly chart with data:', chartData);
+        
+        const monthlyChart = new Chart(monthlyCtx, {
+        type: 'bar',
+                data: chartData,
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'top',
+                labels: {
+                    padding: 15,
+                            font: { size: 13, weight: '600' },
+                            usePointStyle: true
+                }
+            },
+            tooltip: {
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                padding: 12,
+                callbacks: {
+                    label: function(context) {
+                        return context.dataset.label + ': ₹' + context.parsed.y.toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+                    }
+                }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                ticks: {
+                            font: { size: 12 },
+                    callback: function(value) {
+                        return '₹' + value.toLocaleString('en-IN');
+                    }
+                }
+            },
+            x: {
+                        grid: { display: false },
+                        ticks: { font: { size: 12 } }
+                    }
+                }
+            }
+        });
+        console.log('Monthly chart created successfully:', monthlyChart);
+    } catch (error) {
+        console.error('Error initializing monthly chart:', error);
+        console.error('Error details:', error.message, error.stack);
+    }
+} else {
+    console.warn('Monthly chart element not found!');
+}
+{% endif %}
+
+{% if report_type == 'daily' and client_labels %}
+// Top Clients Chart
+const clientsChartEl = document.getElementById('topClientsChart');
+if (clientsChartEl) {
+    try {
+        const clientsCtx = clientsChartEl.getContext('2d');
+        const clientLabels = {{ client_labels|safe }} || [];
+        const clientProfits = {{ client_profits|safe }} || [];
+        
+        new Chart(clientsCtx, {
+        type: 'bar',
+                data: {
+                    labels: clientLabels,
+                    datasets: [{
+                        label: 'Profit',
+                        data: clientProfits,
+                    backgroundColor: colors.profit + 'CC',
+                    borderColor: colors.profit,
+                    borderWidth: 2,
+                    borderRadius: 6
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: {
+                    legend: { display: false },
+            tooltip: {
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                padding: 12,
+                callbacks: {
+                    label: function(context) {
+                        return '₹' + context.parsed.x.toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+                    }
+                }
+            }
+        },
+        scales: {
+            x: {
+                beginAtZero: true,
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                ticks: {
+                            font: { size: 12 },
+                    callback: function(value) {
+                        return '₹' + value.toLocaleString('en-IN');
+                    }
+                }
+            },
+            y: {
+                        grid: { display: false },
+                        ticks: { font: { size: 12 } }
+            }
+        }
+    }
+    });
+    } catch (error) {
+        console.error('Error initializing top clients chart:', error);
+    }
+}
+{% endif %}
+}
+
+// Start chart initialization - wait for Chart.js to load
+function startChartInitialization() {
+    if (typeof Chart !== 'undefined') {
+        console.log('Chart.js is available, initializing charts...');
+        initializeCharts();
+    } else {
+        console.warn('Chart.js not available yet, waiting...');
+        setTimeout(startChartInitialization, 100);
+    }
+}
+
+// Wait for DOM and Chart.js to be ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+        startChartInitialization();
+    });
+} else {
+    // DOM already loaded, start initialization
+    startChartInitialization();
+}
+
+// Fallback: also try on window load
+window.addEventListener('load', function() {
+    if (typeof Chart !== 'undefined' && typeof initializeCharts === 'function') {
+        initializeCharts();
+    }
+});
+</script>
+{% endblock %}

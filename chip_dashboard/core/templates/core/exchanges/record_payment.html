@@ -1,0 +1,121 @@
+{% extends "core/base.html" %}
+
+{% block title %}Record Payment · Transaction Hub{% endblock %}
+{% block page_title %}Record Payment{% endblock %}
+{% block page_subtitle %}{{ account.client.name }} - {{ account.exchange.name }}{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 500px;">
+    {% if messages %}
+        {% for message in messages %}
+            <div style="padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; {% if message.tags == 'success' %}background: #d1fae5; color: #065f46; border: 1px solid #10b981;{% elif message.tags == 'error' %}background: #fee2e2; color: #991b1b; border: 1px solid #dc2626;{% else %}background: #dbeafe; color: #1e40af; border: 1px solid #3b82f6;{% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+    
+    <div style="background: #ecfeff; padding: 16px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #06b6d4;">
+        <div style="font-size: 14px; color: #0e7490; margin-bottom: 8px;"><strong>Current Account Status</strong></div>
+        <div style="font-size: 13px; color: #0e7490;">
+            Funding: {{ account.funding|floatformat:0 }}<br>
+            Exchange Balance: {{ account.exchange_balance|floatformat:0 }}<br>
+            {% if final_share == 0 %}
+                <div style="margin-top: 8px; padding: 8px; background: #fef3c7; border-radius: 4px; color: #92400e;">
+                    <strong>No settlement allowed:</strong> Final share is zero (share percentage too small or PnL too small).
+                </div>
+                <div style="margin-top: 8px;">
+                    <strong>Final Share:</strong> <span style="color: var(--muted);">N.A</span><br>
+                    <strong>Remaining to Settle:</strong> <span style="color: var(--muted);">N.A</span>
+                </div>
+            {% else %}
+                <div style="margin-top: 8px;">
+                    <strong>Final Share:</strong> {{ final_share|floatformat:0 }}<br>
+                    <strong>Remaining to Settle:</strong> 
+                    {% if display_remaining %}
+                        <span class="{% if display_remaining < 0 %}negative{% else %}positive{% endif %}">
+                            {{ display_remaining|floatformat:0 }}
+                        </span>
+                        {% if display_remaining < 0 %}
+                            <span style="font-size: 12px; color: var(--muted);">(You owe client)</span>
+                        {% else %}
+                            <span style="font-size: 12px; color: var(--muted);">(Client owes you)</span>
+                        {% endif %}
+                    {% else %}
+                        {{ remaining_amount|floatformat:0 }}
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-row">
+            <label class="field-label">Payment Date *</label>
+            <input type="date" name="payment_date" class="field-input" value="{{ today|date:'Y-m-d' }}" required>
+            <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">
+                Date when the payment was made or should be recorded
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <label class="field-label">Share Payment (in share units) *</label>
+            {% if final_share == 0 %}
+                <input type="number" name="amount" class="field-input" disabled>
+                <div style="font-size: 13px; color: var(--danger); margin-top: 4px;">
+                    No settlement allowed: Final share is zero.
+                </div>
+            {% else %}
+                <input type="number" name="amount" class="field-input" min="1" max="{{ remaining_amount }}" required>
+                <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">
+                    Maximum: {{ remaining_amount|floatformat:0 }} (Remaining settlement amount)
+                </div>
+            {% endif %}
+        </div>
+        
+        <div class="form-row">
+            <label class="field-label">Notes (Optional)</label>
+            <textarea name="notes" class="field-input" rows="3" placeholder="Add any notes about this payment"></textarea>
+        </div>
+        
+        {% if client_pnl < 0 %}
+        {# LOSS CASE: Show re-add capital option #}
+        <div class="form-row">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" name="re_add_capital" value="true" checked style="width: auto; margin: 0;">
+                <span class="field-label" style="margin: 0;">Re-add capital after settlement (maintain exposure)</span>
+            </label>
+            <div style="font-size: 13px; color: var(--muted); margin-top: 4px; margin-left: 24px;">
+                This will re-inject proportional capital and start a new cycle. 
+                <strong>Note:</strong> This is NOT settlement - it's new capital injection recorded separately.
+            </div>
+        </div>
+        {% else %}
+        {# PROFIT CASE: Hide re-add capital option (forbidden) #}
+        <input type="hidden" name="re_add_capital" value="false">
+        {% endif %}
+        
+        <div style="background: #f3f4f6; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; color: var(--muted);">
+            <strong>Note:</strong> Partial payments are allowed. You can record multiple payments until remaining settlement amount = 0.
+            {% if client_pnl > 0 %}
+            <br><strong>Profit Case:</strong> Funding is not affected when paying profits.
+            {% endif %}
+        </div>
+        
+        <div style="display: flex; gap: 12px; margin-top: 20px;">
+            {% if final_share == 0 %}
+                <button type="button" class="btn" disabled>No Settlement Allowed</button>
+            {% else %}
+                <button type="submit" class="btn btn-primary">Record Payment</button>
+            {% endif %}
+            {% if request.GET.redirect_to == 'pending_summary' %}
+                <a href="{% url 'pending_summary' %}" class="btn">Cancel</a>
+            {% else %}
+                <a href="{% url 'exchange_account_detail' account.pk %}" class="btn">Cancel</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+{% endblock %}
+

@@ -1,0 +1,84 @@
+{% extends "core/base.html" %}
+{% load math_filters %}
+
+{% block title %}Add Funding · Transaction Hub{% endblock %}
+{% block page_title %}Add Funding{% endblock %}
+{% block page_subtitle %}{{ account.client.name }} - {{ account.exchange.name }}{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 500px;">
+    {% if messages %}
+        {% for message in messages %}
+            <div style="padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; {% if message.tags == 'success' %}background: #d1fae5; color: #065f46; border: 1px solid #10b981;{% elif message.tags == 'error' %}background: #fee2e2; color: #991b1b; border: 1px solid #dc2626;{% else %}background: #dbeafe; color: #1e40af; border: 1px solid #3b82f6;{% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+    
+    <div style="background: #ecfeff; padding: 16px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #06b6d4;">
+        <div style="font-size: 14px; color: #0e7490; margin-bottom: 8px;"><strong>Current Account Status</strong></div>
+        <div style="font-size: 13px; color: #0e7490;">
+            Funding: {{ account.funding|currency_inr }}<br>
+            Exchange Balance: {{ account.exchange_balance|currency_inr }}
+        </div>
+    </div>
+    
+    <form method="post" id="funding-form">
+        {% csrf_token %}
+        <div class="form-row">
+            <label class="field-label">Amount *</label>
+            <input 
+                type="text" 
+                id="funding_display" 
+                class="field-input" 
+                placeholder="Enter amount"
+                autocomplete="off"
+                required
+            >
+            <input 
+                type="hidden" 
+                name="amount" 
+                id="funding_actual"
+                required
+            >
+        </div>
+        
+        <div class="form-row">
+            <label class="field-label">Notes (Optional)</label>
+            <textarea name="notes" class="field-input" rows="3" placeholder="Add any notes about this funding"></textarea>
+        </div>
+        
+        <div style="display: flex; gap: 12px; margin-top: 20px;">
+            <button type="submit" class="btn btn-primary">Add Funding</button>
+            <a href="{% url 'exchange_account_detail' account.pk %}" class="btn">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        initAmountInput('funding_display', 'funding_actual');
+        
+        // Form validation: ensure hidden input has value before submit
+        document.getElementById('funding-form').addEventListener('submit', function(e) {
+            const hiddenInput = document.getElementById('funding_actual');
+            const displayInput = document.getElementById('funding_display');
+            
+            // Get clean value from display input
+            let raw = displayInput.value.replace(/,/g, "").replace(/\D/g, "");
+            
+            if (!raw || parseInt(raw) <= 0) {
+                e.preventDefault();
+                alert('Please enter a valid amount greater than zero.');
+                displayInput.focus();
+                return false;
+            }
+            
+            // Update hidden input with clean value
+            hiddenInput.value = raw;
+        });
+    });
+</script>
+{% endblock %}
+
+

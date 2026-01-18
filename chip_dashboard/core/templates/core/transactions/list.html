@@ -1,0 +1,354 @@
+{% extends "core/base.html" %}
+{% load math_filters %}
+
+{% block title %}Transactions · Transaction Hub{% endblock %}
+{% block page_title %}Transactions{% endblock %}
+{% block page_subtitle %}Audit trail of all transactions{% endblock %}
+
+{% block content %}
+<style>
+    /* Fixed center overlay dropdown - zero movement */
+    .client-dropdown {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        max-height: 400px;
+        overflow-y: auto;
+        z-index: 10000;
+        background: var(--bg-content);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        min-width: 300px;
+        max-width: 500px;
+        display: none;
+    }
+    
+    .client-dropdown.active {
+        display: block;
+    }
+    
+    .dropdown-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.3);
+        z-index: 9999;
+        display: none;
+    }
+    
+    .dropdown-overlay.active {
+        display: block;
+    }
+    
+    .dropdown-header {
+        padding: 16px;
+        border-bottom: 1px solid var(--border);
+        font-weight: 600;
+        font-size: 16px;
+        color: var(--text);
+    }
+    
+    .dropdown-options {
+        max-height: 320px;
+        overflow-y: auto;
+    }
+    
+    .dropdown-option {
+        padding: 12px 16px;
+        cursor: pointer;
+        transition: background 0.12s ease;
+        color: var(--text);
+        font-size: 15px;
+    }
+    
+    .dropdown-option:hover {
+        background: var(--accent-soft);
+    }
+    
+    .dropdown-option.selected {
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 500;
+    }
+    
+    .dropdown-trigger {
+        cursor: pointer;
+        position: relative;
+    }
+</style>
+
+<!-- Dropdown Overlay -->
+<div class="dropdown-overlay" id="dropdownOverlay"></div>
+
+<!-- Client Dropdown Modal -->
+<div class="client-dropdown" id="clientDropdown">
+    <div class="dropdown-header" id="clientDropdownHeader">Select Client</div>
+    <div class="dropdown-options" id="clientDropdownOptions"></div>
+</div>
+
+<!-- Exchange Dropdown Modal -->
+<div class="client-dropdown" id="exchangeDropdown">
+    <div class="dropdown-header" id="exchangeDropdownHeader">Select Exchange</div>
+    <div class="dropdown-options" id="exchangeDropdownOptions"></div>
+</div>
+
+<!-- Type Dropdown Modal -->
+<div class="client-dropdown" id="typeDropdown">
+    <div class="dropdown-header" id="typeDropdownHeader">Select Type</div>
+    <div class="dropdown-options" id="typeDropdownOptions"></div>
+</div>
+<!-- Filters -->
+<div style="background: var(--bg-content); border-radius: 8px; padding: 20px; border: 1px solid var(--border); margin-bottom: 24px;">
+    {% if selected_client_exchange_obj %}
+    <div style="background: var(--accent-light); border: 1px solid var(--accent); border-radius: 6px; padding: 12px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+        <div>
+            <strong style="color: var(--accent);">Filtered by:</strong>
+            <span style="color: var(--text); margin-left: 8px;">
+                {{ selected_client_exchange_obj.client.name }} - {{ selected_client_exchange_obj.exchange.name }}
+            </span>
+        </div>
+        <a href="{% url 'transaction_list' %}" class="btn btn-sm" style="background: var(--bg-content);">Clear Filter</a>
+    </div>
+    {% endif %}
+    <form method="get" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+        {% if selected_client_exchange %}
+        <input type="hidden" name="client_exchange" value="{{ selected_client_exchange }}">
+        {% endif %}
+        <div style="flex: 1; min-width: 200px;">
+            <label style="display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px;">Client</label>
+            <div class="dropdown-trigger field-input" id="clientTrigger" style="display: flex; align-items: center; justify-content: space-between; cursor: {% if selected_client_exchange %}not-allowed{% else %}pointer{% endif %}; {% if selected_client_exchange %}opacity: 0.6;{% endif %}">
+                <span id="clientDisplay">{% if selected_client %}{% for client in all_clients %}{% if selected_client == client.pk %}{{ client.name }}{% if client.code %} ({{ client.code }}){% endif %}{% endif %}{% endfor %}{% else %}All Clients{% endif %}</span>
+                <span style="color: var(--muted);">▼</span>
+            </div>
+            <select name="client" id="clientSelect" style="display: none;" {% if selected_client_exchange %}disabled{% endif %}>
+                <option value="">All Clients</option>
+                {% for client in all_clients %}
+                    <option value="{{ client.pk }}" {% if selected_client == client.pk %}selected{% endif %}>
+                        {{ client.name }}{% if client.code %} ({{ client.code }}){% endif %}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="flex: 1; min-width: 200px;">
+            <label style="display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px;">Exchange</label>
+            <div class="dropdown-trigger field-input" id="exchangeTrigger" style="display: flex; align-items: center; justify-content: space-between; cursor: {% if selected_client_exchange %}not-allowed{% else %}pointer{% endif %}; {% if selected_client_exchange %}opacity: 0.6;{% endif %}">
+                <span id="exchangeDisplay">{% if selected_exchange %}{% for exchange in all_exchanges %}{% if selected_exchange == exchange.pk %}{{ exchange.name }}{% if exchange.code %} ({{ exchange.code }}){% endif %}{% endif %}{% endfor %}{% else %}All Exchanges{% endif %}</span>
+                <span style="color: var(--muted);">▼</span>
+            </div>
+            <select name="exchange" id="exchangeSelect" style="display: none;" {% if selected_client_exchange %}disabled{% endif %}>
+                <option value="">All Exchanges</option>
+                {% for exchange in all_exchanges %}
+                    <option value="{{ exchange.pk }}" {% if selected_exchange == exchange.pk %}selected{% endif %}>
+                        {{ exchange.name }}{% if exchange.code %} ({{ exchange.code }}){% endif %}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="flex: 1; min-width: 200px;">
+            <label style="display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px;">Type</label>
+            <div class="dropdown-trigger field-input" id="typeTrigger" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                <span id="typeDisplay">{% if selected_type %}{% if selected_type == 'FUNDING_MANUAL' %}Funding{% elif selected_type == 'TRADE' %}Trade{% elif selected_type == 'ADJUSTMENT' %}Adjustment{% elif selected_type == 'RECORD_PAYMENT' %}Record Payment{% else %}{{ selected_type }}{% endif %}{% else %}All Types{% endif %}</span>
+                <span style="color: var(--muted);">▼</span>
+            </div>
+            <select name="type" id="typeSelect" style="display: none;">
+                <option value="">All Types</option>
+                <option value="FUNDING_MANUAL" {% if selected_type == 'FUNDING_MANUAL' %}selected{% endif %}>Funding</option>
+                <option value="TRADE" {% if selected_type == 'TRADE' %}selected{% endif %}>Trade</option>
+                <option value="ADJUSTMENT" {% if selected_type == 'ADJUSTMENT' %}selected{% endif %}>Adjustment</option>
+                <!-- Legacy types for backward compatibility -->
+                <option value="RECORD_PAYMENT" {% if selected_type == 'RECORD_PAYMENT' %}selected{% endif %}>Record Payment</option>
+            </select>
+        </div>
+        <div>
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="{% url 'transaction_list' %}" class="btn" style="margin-left: 8px;">Clear</a>
+        </div>
+    </form>
+</div>
+
+<div class="table-wrapper">
+    <div class="table-header">
+        <span>All Transactions</span>
+        <span class="pill">Total: {{ transactions|length }}</span>
+    </div>
+    <table>
+        <thead>
+        <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Amount</th>
+            <th>Funding After</th>
+            <th>Exchange After</th>
+            <th>Notes</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for transaction in transactions %}
+            <tr>
+                <td>{{ transaction.date|date:"Y-m-d H:i" }}</td>
+                <td>
+                    <span class="badge {% if transaction.type == 'FUNDING_MANUAL' or transaction.type == 'FUNDING_AUTO' %}badge-success{% elif transaction.type == 'TRADE' %}badge-info{% elif transaction.type == 'SETTLEMENT_SHARE' %}badge-warning{% else %}badge-muted{% endif %}">
+                        {{ transaction.get_type_display }}
+                    </span>
+                </td>
+                <td>{{ transaction.amount|currency_inr }}</td>
+                <td>{% if transaction.funding_after %}{{ transaction.funding_after|currency_inr }}{% else %}—{% endif %}</td>
+                <td>{% if transaction.exchange_balance_after %}{{ transaction.exchange_balance_after|currency_inr }}{% else %}—{% endif %}</td>
+                <td>{{ transaction.notes|default:"—"|truncatewords:5 }}</td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td colspan="6" style="text-align: center; color: var(--muted); padding: 40px;">
+                    No transactions yet.
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+    // Fixed center overlay dropdown functionality
+    let activeDropdown = null; // Track which dropdown is currently open
+    
+    function initDropdown(dropdownId, triggerId, selectId, displayId, headerId, optionsId) {
+        const dropdown = document.getElementById(dropdownId);
+        const trigger = document.getElementById(triggerId);
+        const select = document.getElementById(selectId);
+        const display = document.getElementById(displayId);
+        const header = document.getElementById(headerId);
+        const optionsContainer = document.getElementById(optionsId);
+        const overlay = document.getElementById('dropdownOverlay');
+        
+        if (!trigger || !select || !dropdown) return;
+        
+        // Build options from select element
+        function buildOptions() {
+            optionsContainer.innerHTML = '';
+            Array.from(select.options).forEach(option => {
+                const div = document.createElement('div');
+                div.className = 'dropdown-option' + (option.selected ? ' selected' : '');
+                div.textContent = option.text;
+                div.dataset.value = option.value;
+                div.onclick = (e) => {
+                    e.stopPropagation();
+                    select.value = option.value;
+                    display.textContent = option.text || option.value || 'All';
+                    closeDropdown();
+                    // Update selected state
+                    optionsContainer.querySelectorAll('.dropdown-option').forEach(opt => {
+                        opt.classList.remove('selected');
+                    });
+                    div.classList.add('selected');
+                    
+                    // Auto-submit form when option is selected
+                    setTimeout(() => {
+                        const form = select.closest('form');
+                        if (form) {
+                            form.submit();
+                        }
+                    }, 100); // Small delay to ensure dropdown closes first
+                };
+                optionsContainer.appendChild(div);
+            });
+        }
+        
+        function openDropdown() {
+            if (select.disabled) return;
+            // Close any other open dropdown first
+            if (activeDropdown && activeDropdown !== dropdown) {
+                activeDropdown.classList.remove('active');
+            }
+            buildOptions();
+            dropdown.classList.add('active');
+            overlay.classList.add('active');
+            activeDropdown = dropdown;
+        }
+        
+        function closeDropdown() {
+            dropdown.classList.remove('active');
+            overlay.classList.remove('active');
+            if (activeDropdown === dropdown) {
+                activeDropdown = null;
+            }
+        }
+        
+        trigger.onclick = (e) => {
+            e.stopPropagation();
+            if (!select.disabled) {
+                // Only open dropdown, don't toggle
+                if (activeDropdown === dropdown) {
+                    // Already open, do nothing (or close if you want toggle)
+                    return;
+                }
+                openDropdown();
+            }
+        };
+        
+        // Prevent dropdown from closing when clicking inside it
+        dropdown.onclick = (e) => {
+            e.stopPropagation();
+        };
+    }
+    
+    // Single global handler for closing dropdowns when clicking outside
+    const overlay = document.getElementById('dropdownOverlay');
+    if (overlay) {
+        overlay.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (activeDropdown) {
+                activeDropdown.classList.remove('active');
+                overlay.classList.remove('active');
+                activeDropdown = null;
+            }
+        };
+    }
+    
+    // Single global handler for document clicks
+    document.addEventListener('click', (e) => {
+        if (!activeDropdown) return;
+        
+        const dropdown = activeDropdown;
+        const trigger = dropdown.previousElementSibling || document.querySelector(`[id$="Trigger"]`);
+        
+        // Check if click is outside dropdown and trigger
+        if (!dropdown.contains(e.target)) {
+            // Find the trigger for this dropdown
+            const allTriggers = document.querySelectorAll('.dropdown-trigger');
+            let clickedTrigger = false;
+            allTriggers.forEach(trig => {
+                if (trig.contains(e.target)) {
+                    clickedTrigger = true;
+                }
+            });
+            
+            if (!clickedTrigger) {
+                dropdown.classList.remove('active');
+                if (overlay) overlay.classList.remove('active');
+                activeDropdown = null;
+            }
+        }
+    }, true); // Use capture phase
+    
+    // Close on escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && activeDropdown) {
+            activeDropdown.classList.remove('active');
+            if (overlay) overlay.classList.remove('active');
+            activeDropdown = null;
+        }
+    });
+    
+    // Initialize all dropdowns
+    document.addEventListener('DOMContentLoaded', () => {
+        initDropdown('clientDropdown', 'clientTrigger', 'clientSelect', 'clientDisplay', 'clientDropdownHeader', 'clientDropdownOptions');
+        initDropdown('exchangeDropdown', 'exchangeTrigger', 'exchangeSelect', 'exchangeDisplay', 'exchangeDropdownHeader', 'exchangeDropdownOptions');
+        initDropdown('typeDropdown', 'typeTrigger', 'typeSelect', 'typeDisplay', 'typeDropdownHeader', 'typeDropdownOptions');
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,249 @@
+{% extends "core/base.html" %}
+{% load math_filters %}
+
+{% block title %}Pending Payments · Transaction Hub{% endblock %}
+{% block page_title %}Pending Payments{% endblock %}
+{% block page_subtitle %}Two separate sections: Clients owe you vs You owe clients{% endblock %}
+
+{% block content %}
+<!-- Search Bar -->
+<div style="background: var(--bg-content); border-radius: 8px; padding: 20px; border: 1px solid var(--border); margin-bottom: 24px;">
+    <form method="get" style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 300px;">
+            <label style="display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px;">Search Client or Exchange</label>
+            <input type="text" name="search" class="field-input" value="{{ search_query }}" placeholder="Search by client name, code, or exchange name..." style="width: 100%;">
+        </div>
+    <div>
+            <button type="submit" class="btn btn-primary">Search</button>
+            {% if search_query %}
+                <a href="{% url 'pending_summary' %}" class="btn" style="margin-left: 8px;">Clear</a>
+            {% endif %}
+            </div>
+    </form>
+    </div>
+
+<div style="background: var(--bg-content); border-radius: 8px; padding: 20px; border: 1px solid var(--border); margin-bottom: 24px;">
+    <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: space-between;">
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <button onclick="showSection('clients-owe')" id="btn-clients-owe" class="btn btn-primary" style="background: var(--accent);">
+        Clients Owe You
+    </button>
+            <button onclick="showSection('you-owe')" id="btn-you-owe" class="btn" style="background: var(--bg-content);">
+        You Owe Clients
+    </button>
+    </div>
+        <div>
+            <a href="{% url 'export_pending_csv' %}{% if search_query %}?search={{ search_query|urlencode }}{% endif %}" class="btn btn-primary" style="background: var(--success);">
+                📥 Download CSV
+            </a>
+        </div>
+    </div>
+        </div>
+
+<!-- Summary Cards -->
+<div class="card-grid" style="margin-bottom: 24px;">
+    <div class="card">
+        <div class="card-title">Total Clients Owe</div>
+        <div class="card-value negative">{{ total_clients_owe|currency_inr }}</div>
+        <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Remaining to settle: {{ total_my_share_clients_owe|currency_inr }}</div>
+        </div>
+    <div class="card">
+        <div class="card-title">Total You Owe</div>
+        <div class="card-value negative">{{ total_you_owe|currency_inr }}</div>
+        <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Remaining to settle: {{ total_my_share_you_owe|currency_inr }}</div>
+    </div>
+        </div>
+
+<!-- Clients Owe You Section -->
+<div id="section-clients-owe" class="section-content">
+    <div style="background: var(--bg-content); border-radius: 8px; padding: 24px; border: 1px solid var(--border); margin-bottom: 24px;">
+        <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">Clients Owe You</h3>
+        <p style="color: var(--muted); margin-bottom: 16px;">
+            These clients are in LOSS. They owe you settlement amounts.
+            Remaining to settle: {{ total_my_share_clients_owe|currency_inr }}.
+        </p>
+        
+        {% if clients_owe_you %}
+        <div class="table-wrapper">
+            <table>
+            <thead>
+            <tr>
+                <th>Client</th>
+                <th>U_CODE</th>
+                <th>Master</th>
+                <th>OPENING POINTS</th>
+                <th>AVL.POINTS(CLOSING POINTS)</th>
+                <th>PROFIT(+)/LOSS(-)</th>
+                <th>MY SHARE</th>
+                <th>MY%</th>
+                <th>Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+                {% for item in clients_owe_you %}
+                <tr>
+                    <td>
+                        <a href="{% url 'client_detail' item.client.pk %}" style="color: var(--accent); text-decoration: none;">
+                            {{ item.client.name }}
+                        </a>
+                    </td>
+                    <td>
+                        {% if item.client.code %}
+                            <span style="color: var(--muted); font-size: 13px;">{{ item.client.code }}</span>
+                        {% else %}
+                            <span style="color: var(--muted); font-size: 13px;">-</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ item.exchange.name }}{% if item.exchange.code %} ({{ item.exchange.code }}){% endif %}</td>
+                    <td>{{ item.account.funding|currency_inr }}</td>
+                    <td>{{ item.account.exchange_balance|currency_inr }}</td>
+                    <td>
+                        {% if item.show_na %}
+                            <span style="color: var(--muted);">N.A</span>
+                        {% else %}
+                            <span class="negative">{{ item.client_pnl|currency_inr }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.show_na %}
+                            <span style="color: var(--muted);">N.A</span>
+                            {% else %}
+                            <strong style="color: var(--accent);">{{ item.remaining_amount|currency_inr }}</strong>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.share_percentage is not None %}
+                            {{ item.share_percentage }}%
+                        {% else %}
+                            {{ item.account.my_percentage|floatformat:2 }}%
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if not item.show_na %}
+                            <a href="{% url 'record_payment' item.account.pk %}?redirect_to=pending_summary" class="btn btn-sm btn-primary" style="margin-right: 4px;">Record Payment</a>
+                        {% endif %}
+                        <a href="{% url 'exchange_account_detail' item.account.pk %}" class="btn btn-sm">View Account</a>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+                    {% else %}
+        <div style="text-align: center; padding: 40px; color: var(--muted);">
+            <div style="font-size: 16px; margin-bottom: 8px;">No clients owe you</div>
+            <div style="font-size: 14px;">All clients are either settled or in profit</div>
+</div>
+            {% endif %}
+        </div>
+    </div>
+
+<!-- You Owe Clients Section -->
+<div id="section-you-owe" class="section-content" style="display: none;">
+    <div style="background: var(--bg-content); border-radius: 8px; padding: 24px; border: 1px solid var(--border); margin-bottom: 24px;">
+        <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">You Owe Clients</h3>
+        <p style="color: var(--muted); margin-bottom: 16px;">
+            These clients are in PROFIT. You owe them settlement amounts.
+            Remaining to settle: {{ total_my_share_you_owe|currency_inr }}.
+        </p>
+        
+        {% if you_owe_clients %}
+        <div class="table-wrapper">
+            <table>
+            <thead>
+            <tr>
+                <th>Client</th>
+                <th>U_CODE</th>
+                <th>Master</th>
+                <th>OPENING POINTS</th>
+                <th>AVL.POINTS(CLOSING POINTS)</th>
+                <th>PROFIT(+)/LOSS(-)</th>
+                <th>MY SHARE</th>
+                <th>MY%</th>
+                <th>Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+                {% for item in you_owe_clients %}
+                <tr>
+                    <td>
+                        <a href="{% url 'client_detail' item.client.pk %}" style="color: var(--accent); text-decoration: none;">
+                            {{ item.client.name }}
+                        </a>
+                    </td>
+                    <td>
+                        {% if item.client.code %}
+                            <span style="color: var(--muted); font-size: 13px;">{{ item.client.code }}</span>
+                        {% else %}
+                            <span style="color: var(--muted); font-size: 13px;">-</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ item.exchange.name }}{% if item.exchange.code %} ({{ item.exchange.code }}){% endif %}</td>
+                    <td>{{ item.account.funding|currency_inr }}</td>
+                    <td>{{ item.account.exchange_balance|currency_inr }}</td>
+                    <td>
+                        {% if item.show_na %}
+                            <span style="color: var(--muted);">N.A</span>
+                        {% else %}
+                            <span class="positive">{{ item.client_pnl|currency_inr }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.show_na %}
+                            <span style="color: var(--muted);">N.A</span>
+                            {% else %}
+                            <strong style="color: var(--danger);">{{ item.remaining_amount|currency_inr }}</strong>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.share_percentage is not None %}
+                            {{ item.share_percentage }}%
+                        {% else %}
+                            {{ item.account.my_percentage|floatformat:2 }}%
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if not item.show_na %}
+                            <a href="{% url 'record_payment' item.account.pk %}?redirect_to=pending_summary" class="btn btn-sm btn-primary" style="margin-right: 4px;">Record Payment</a>
+                        {% endif %}
+                        <a href="{% url 'exchange_account_detail' item.account.pk %}" class="btn btn-sm">View Account</a>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+        {% else %}
+        <div style="text-align: center; padding: 40px; color: var(--muted);">
+            <div style="font-size: 16px; margin-bottom: 8px;">You don't owe any clients</div>
+            <div style="font-size: 14px;">All clients are either settled or in loss</div>
+</div>
+            {% endif %}
+    </div>
+</div>
+
+<script>
+function showSection(section) {
+    // Hide all sections
+    document.getElementById('section-clients-owe').style.display = 'none';
+    document.getElementById('section-you-owe').style.display = 'none';
+    
+    // Reset button styles
+    document.getElementById('btn-clients-owe').classList.remove('btn-primary');
+    document.getElementById('btn-clients-owe').style.background = 'var(--bg-content)';
+    document.getElementById('btn-you-owe').classList.remove('btn-primary');
+    document.getElementById('btn-you-owe').style.background = 'var(--bg-content)';
+    
+    // Show selected section
+    if (section === 'clients-owe') {
+        document.getElementById('section-clients-owe').style.display = 'block';
+        document.getElementById('btn-clients-owe').classList.add('btn-primary');
+        document.getElementById('btn-clients-owe').style.background = 'var(--accent)';
+    } else if (section === 'you-owe') {
+        document.getElementById('section-you-owe').style.display = 'block';
+        document.getElementById('btn-you-owe').classList.add('btn-primary');
+        document.getElementById('btn-you-owe').style.background = 'var(--accent)';
+    }
+}
+</script>
+{% endblock %}

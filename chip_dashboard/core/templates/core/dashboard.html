@@ -1,0 +1,98 @@
+{% extends "core/base.html" %}
+{% load math_filters %}
+
+{% block title %}Dashboard · Transaction Hub{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}Live overview of turnover, profit, and pending payments{% endblock %}
+
+{% block content %}
+<div class="card-grid">
+    <div class="card">
+        <div class="card-title">Total Clients</div>
+        <div class="card-value">{{ total_clients }}</div>
+    </div>
+    <div class="card">
+        <div class="card-title">Total Exchanges</div>
+        <div class="card-value">{{ total_exchanges }}</div>
+    </div>
+    <div class="card">
+        <div class="card-title">Total Accounts</div>
+        <div class="card-value">{{ total_accounts }}</div>
+    </div>
+    <div class="card">
+        <div class="card-title">Total Funding</div>
+        <div class="card-value">{{ total_funding|currency_inr }}</div>
+    </div>
+    <div class="card">
+        <div class="card-title">Total Exchange Balance</div>
+        <div class="card-value">{{ total_exchange_balance|currency_inr }}</div>
+    </div>
+    <div class="card">
+        <div class="card-title">Total Client PnL</div>
+        <div class="card-value {% if total_client_pnl > 0 %}positive{% elif total_client_pnl < 0 %}negative{% endif %}">
+            {{ total_client_pnl|currency_inr }}
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-title">Total My Share</div>
+        <div class="card-value {% if total_my_share > 0 %}positive{% elif total_my_share < 0 %}negative{% endif %}">
+            {{ total_my_share|currency_inr }}
+        </div>
+    </div>
+</div>
+
+{% if recent_accounts %}
+<div style="background: var(--bg-content); border-radius: 8px; padding: 24px; border: 1px solid var(--border); margin-top: 24px;">
+    <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 16px;">Recent Accounts</h3>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Client</th>
+                    <th>Exchange</th>
+                    <th>Funding</th>
+                    <th>Balance</th>
+                    <th>PnL</th>
+                    <th>My Share</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for account in recent_accounts %}
+                    {% with pnl=account.compute_client_pnl share=account.compute_my_share %}
+                    <tr>
+                        <td>{{ account.client.name }}</td>
+                        <td>{{ account.exchange.name }}</td>
+                        <td>{{ account.funding|currency_inr }}</td>
+                        <td>{{ account.exchange_balance|currency_inr }}</td>
+                        <td>
+                            {% if pnl == 0 %}
+                                <span style="color: var(--muted);">N.A</span>
+                            {% else %}
+                                <span class="{% if pnl > 0 %}positive{% else %}negative{% endif %}">
+                                    {{ pnl|currency_inr }}
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if pnl == 0 %}
+                                <span style="color: var(--muted);">N.A</span>
+                            {% else %}
+                                {{ share|currency_inr }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'exchange_account_detail' account.pk %}" class="btn btn-sm">View</a>
+                        </td>
+                    </tr>
+                    {% endwith %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+
