@@ -1,0 +1,822 @@
+[
+{
+  "model": "auth.permission",
+  "pk": 1,
+  "fields": {
+    "name": "Can add permission",
+    "content_type": 2,
+    "codename": "add_permission"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 2,
+  "fields": {
+    "name": "Can change permission",
+    "content_type": 2,
+    "codename": "change_permission"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 3,
+  "fields": {
+    "name": "Can delete permission",
+    "content_type": 2,
+    "codename": "delete_permission"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 4,
+  "fields": {
+    "name": "Can view permission",
+    "content_type": 2,
+    "codename": "view_permission"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 5,
+  "fields": {
+    "name": "Can add group",
+    "content_type": 3,
+    "codename": "add_group"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 6,
+  "fields": {
+    "name": "Can change group",
+    "content_type": 3,
+    "codename": "change_group"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 7,
+  "fields": {
+    "name": "Can delete group",
+    "content_type": 3,
+    "codename": "delete_group"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 8,
+  "fields": {
+    "name": "Can view group",
+    "content_type": 3,
+    "codename": "view_group"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 9,
+  "fields": {
+    "name": "Can add content type",
+    "content_type": 1,
+    "codename": "add_contenttype"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 10,
+  "fields": {
+    "name": "Can change content type",
+    "content_type": 1,
+    "codename": "change_contenttype"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 11,
+  "fields": {
+    "name": "Can delete content type",
+    "content_type": 1,
+    "codename": "delete_contenttype"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 12,
+  "fields": {
+    "name": "Can view content type",
+    "content_type": 1,
+    "codename": "view_contenttype"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 13,
+  "fields": {
+    "name": "Can add log entry",
+    "content_type": 4,
+    "codename": "add_logentry"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 14,
+  "fields": {
+    "name": "Can change log entry",
+    "content_type": 4,
+    "codename": "change_logentry"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 15,
+  "fields": {
+    "name": "Can delete log entry",
+    "content_type": 4,
+    "codename": "delete_logentry"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 16,
+  "fields": {
+    "name": "Can view log entry",
+    "content_type": 4,
+    "codename": "view_logentry"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 17,
+  "fields": {
+    "name": "Can add session",
+    "content_type": 5,
+    "codename": "add_session"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 18,
+  "fields": {
+    "name": "Can change session",
+    "content_type": 5,
+    "codename": "change_session"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 19,
+  "fields": {
+    "name": "Can delete session",
+    "content_type": 5,
+    "codename": "delete_session"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 20,
+  "fields": {
+    "name": "Can view session",
+    "content_type": 5,
+    "codename": "view_session"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 21,
+  "fields": {
+    "name": "Can add client",
+    "content_type": 6,
+    "codename": "add_client"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 22,
+  "fields": {
+    "name": "Can change client",
+    "content_type": 6,
+    "codename": "change_client"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 23,
+  "fields": {
+    "name": "Can delete client",
+    "content_type": 6,
+    "codename": "delete_client"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 24,
+  "fields": {
+    "name": "Can view client",
+    "content_type": 6,
+    "codename": "view_client"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 25,
+  "fields": {
+    "name": "Can add client exchange account",
+    "content_type": 7,
+    "codename": "add_clientexchangeaccount"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 26,
+  "fields": {
+    "name": "Can change client exchange account",
+    "content_type": 7,
+    "codename": "change_clientexchangeaccount"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 27,
+  "fields": {
+    "name": "Can delete client exchange account",
+    "content_type": 7,
+    "codename": "delete_clientexchangeaccount"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 28,
+  "fields": {
+    "name": "Can view client exchange account",
+    "content_type": 7,
+    "codename": "view_clientexchangeaccount"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 29,
+  "fields": {
+    "name": "Can add exchange",
+    "content_type": 8,
+    "codename": "add_exchange"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 30,
+  "fields": {
+    "name": "Can change exchange",
+    "content_type": 8,
+    "codename": "change_exchange"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 31,
+  "fields": {
+    "name": "Can delete exchange",
+    "content_type": 8,
+    "codename": "delete_exchange"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 32,
+  "fields": {
+    "name": "Can view exchange",
+    "content_type": 8,
+    "codename": "view_exchange"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 33,
+  "fields": {
+    "name": "Can add transaction",
+    "content_type": 9,
+    "codename": "add_transaction"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 34,
+  "fields": {
+    "name": "Can change transaction",
+    "content_type": 9,
+    "codename": "change_transaction"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 35,
+  "fields": {
+    "name": "Can delete transaction",
+    "content_type": 9,
+    "codename": "delete_transaction"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 36,
+  "fields": {
+    "name": "Can view transaction",
+    "content_type": 9,
+    "codename": "view_transaction"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 37,
+  "fields": {
+    "name": "Can add Report Configuration",
+    "content_type": 10,
+    "codename": "add_clientexchangereportconfig"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 38,
+  "fields": {
+    "name": "Can change Report Configuration",
+    "content_type": 10,
+    "codename": "change_clientexchangereportconfig"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 39,
+  "fields": {
+    "name": "Can delete Report Configuration",
+    "content_type": 10,
+    "codename": "delete_clientexchangereportconfig"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 40,
+  "fields": {
+    "name": "Can view Report Configuration",
+    "content_type": 10,
+    "codename": "view_clientexchangereportconfig"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 41,
+  "fields": {
+    "name": "Can add settlement",
+    "content_type": 11,
+    "codename": "add_settlement"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 42,
+  "fields": {
+    "name": "Can change settlement",
+    "content_type": 11,
+    "codename": "change_settlement"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 43,
+  "fields": {
+    "name": "Can delete settlement",
+    "content_type": 11,
+    "codename": "delete_settlement"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 44,
+  "fields": {
+    "name": "Can view settlement",
+    "content_type": 11,
+    "codename": "view_settlement"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 45,
+  "fields": {
+    "name": "Can add email otp",
+    "content_type": 12,
+    "codename": "add_emailotp"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 46,
+  "fields": {
+    "name": "Can change email otp",
+    "content_type": 12,
+    "codename": "change_emailotp"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 47,
+  "fields": {
+    "name": "Can delete email otp",
+    "content_type": 12,
+    "codename": "delete_emailotp"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 48,
+  "fields": {
+    "name": "Can view email otp",
+    "content_type": 12,
+    "codename": "view_emailotp"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 49,
+  "fields": {
+    "name": "Can add user",
+    "content_type": 13,
+    "codename": "add_customuser"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 50,
+  "fields": {
+    "name": "Can change user",
+    "content_type": 13,
+    "codename": "change_customuser"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 51,
+  "fields": {
+    "name": "Can delete user",
+    "content_type": 13,
+    "codename": "delete_customuser"
+  }
+},
+{
+  "model": "auth.permission",
+  "pk": 52,
+  "fields": {
+    "name": "Can view user",
+    "content_type": 13,
+    "codename": "view_customuser"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 1,
+  "fields": {
+    "app_label": "contenttypes",
+    "model": "contenttype"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 2,
+  "fields": {
+    "app_label": "auth",
+    "model": "permission"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 3,
+  "fields": {
+    "app_label": "auth",
+    "model": "group"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 4,
+  "fields": {
+    "app_label": "admin",
+    "model": "logentry"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 5,
+  "fields": {
+    "app_label": "sessions",
+    "model": "session"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 6,
+  "fields": {
+    "app_label": "core",
+    "model": "client"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 7,
+  "fields": {
+    "app_label": "core",
+    "model": "clientexchangeaccount"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 8,
+  "fields": {
+    "app_label": "core",
+    "model": "exchange"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 9,
+  "fields": {
+    "app_label": "core",
+    "model": "transaction"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 10,
+  "fields": {
+    "app_label": "core",
+    "model": "clientexchangereportconfig"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 11,
+  "fields": {
+    "app_label": "core",
+    "model": "settlement"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 12,
+  "fields": {
+    "app_label": "core",
+    "model": "emailotp"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "pk": 13,
+  "fields": {
+    "app_label": "core",
+    "model": "customuser"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "2uh1ucla0mdt33v94t57ay29sjjrokgl",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hBhcLQu3XsGMgyDRQk1LV0Y491tky50-9_77608za338ySjz1GdlVG73y0QP6SuIN6p3gbNQ21jDnpV9EYnfR2ilMvm_gV6mvrlTYxk4YCWEDpzwoBBTOI9ILIEgWgMcQQkNtBZcO4IKSTHwTIlZ7slyiVLbb69nuJTLk3GtVuK-nwBYLRB8w:1vfJwU:uVCffqwiG2tjW0kazeLOW4lO9HkwUFgP-Qkye5h3Ge4",
+    "expire_date": "2026-01-12T16:34:54.314Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "3tb8mdzzllenyx6xu906p6sj65jwvqdz",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hBhcLQu3XsGMgyDRQk1LV0Y491tky50-9_77608za338ySjz1GdlVG73y0QP6SuIN6p3gbNQ21jDnpV9EYnfR2ilMvm_gV6mvrlTYxk4YCWEDpzwoBBTOI9ILIEgWgMcQQkNtBZcO4IKSTHwTIlZ7slyiVLbb69nuJTLk3GtVuK-nwBYLRB8w:1vffIE:GYXA5aF1QnJZdLj3hx7T74qJsYnALaVgc0orjsGdyz0",
+    "expire_date": "2026-01-13T15:22:46.591Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "4q8y1pb0z0unyj6vgy06h2sfl28x6xwr",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hBhcLQu3XsGMgyDRQk1LV0Y491tky50-9_77608za338ySjz1GdlVG73y0QP6SuIN6p3gbNQ21jDnpV9EYnfR2ilMvm_gV6mvrlTYxk4YCWEDpzwoBBTOI9ILIEgWgMcQQkNtBZcO4IKSTHwTIlZ7slyiVLbb69nuJTLk3GtVuK-nwBYLRB8w:1vfun4:vY56LQitCsCnFZyV0UYa9wrwy6a1zmYG8AQVlvSTBUA",
+    "expire_date": "2026-01-14T07:55:38.261Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "52obiwyesquyu15y2fas1w5pwm4da5n0",
+  "fields": {
+    "session_data": ".eJxVjDEOwjAMRe-SGUUkDoYwsnOGyHYcUkCp1LQT4u5QqQOs_733XybRMte0dJ3SkM3ZOLP73ZjkoW0F-U7tNloZ2zwNbFfFbrTb65j1edncv4NKvX5rEiQPB_SEEN0JGVldkT0girJCdo4kA5I4iB5COELhEoS9UAk-mvcH6cc4Rw:1vfFhT:zc7zio2d2Dbf6a_Em9-UaCG2hOI4vZCkiicXAY98_lM",
+    "expire_date": "2026-01-12T12:03:07.618Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "5ipmvww9y4vjmjztcg9ivqzo7b5zy5fs",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hBhcLQu3XsGMgyDRQk1LV0Y491tky50-9_77608za338ySjz1GdlVG73y0QP6SuIN6p3gbNQ21jDnpV9EYnfR2ilMvm_gV6mvrlTYxk4YCWEDpzwoBBTOI9ILIEgWgMcQQkNtBZcO4IKSTHwTIlZ7slyiVLbb69nuJTLk3GtVuK-nwBYLRB8w:1vfhJJ:G1sjNng8PvB95DfCqbY-rMAus5992SUX2UishKmasn8",
+    "expire_date": "2026-01-13T17:32:01.420Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "6t0ytqcxy0rfnkq34el2clqd9795snw1",
+  "fields": {
+    "session_data": ".eJxVjDEOwjAMRe-SGUUkDoYwsnOGyHYcUkCp1LQT4u5QqQOs_733XybRMte0dJ3SkM3ZOLP73ZjkoW0F-U7tNloZ2zwNbFfFbrTb65j1edncv4NKvX5rEiQPB_SEEN0JGVldkT0girJCdo4kA5I4iB5COELhEoS9UAk-mvcH6cc4Rw:1vfFsd:q7gsBrM1LRaZVnmEt-jI6bFSr4Wog9-JlHi-ZZVLjqQ",
+    "expire_date": "2026-01-12T12:14:39.303Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "8kep2n9mwzr4sohi7jiz4bds4yti2o28",
+  "fields": {
+    "session_data": ".eJxVjDEOwjAMRe-SGUUkDoYwsnOGyHYcUkCp1LQT4u5QqQOs_733XybRMte0dJ3SkM3ZOLP73ZjkoW0F-U7tNloZ2zwNbFfFbrTb65j1edncv4NKvX5rEiQPB_SEEN0JGVldkT0girJCdo4kA5I4iB5COELhEoS9UAk-mvcH6cc4Rw:1vgOJ9:rGn1P-4zzu2PGWtFv1BngD7mPvIQ9kFYwNjyeA_VI4s",
+    "expire_date": "2026-01-15T15:26:43.702Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "8q6tx2ucljtxqbu7bs2a6llopu7jrdva",
+  "fields": {
+    "session_data": ".eJxVjDEOwjAMRe-SGUUkDoYwsnOGyHYcUkCp1LQT4u5QqQOs_733XybRMte0dJ3SkM3ZOLP73ZjkoW0F-U7tNloZ2zwNbFfFbrTb65j1edncv4NKvX5rEiQPB_SEEN0JGVldkT0girJCdo4kA5I4iB5COELhEoS9UAk-mvcH6cc4Rw:1vfKDa:58HHcMFs4z0m1bmYDGBnL03SagK8g3e1rO6q2Eg6NRQ",
+    "expire_date": "2026-01-12T16:52:34.108Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "c4oc41uyuipxj1falxm5zgeuqruk2tzv",
+  "fields": {
+    "session_data": ".eJxVjDEOwjAMRe-SGUUkDoYwsnOGyHYcUkCp1LQT4u5QqQOs_733XybRMte0dJ3SkM3ZOLP73ZjkoW0F-U7tNloZ2zwNbFfFbrTb65j1edncv4NKvX5rEiQPB_SEEN0JGVldkT0girJCdo4kA5I4iB5COELhEoS9UAk-mvcH6cc4Rw:1vf2qh:Leev0B0Utje-RhUtR31-jnFJzwsRNmMEA498WZNIs1c",
+    "expire_date": "2026-01-11T22:19:47.202Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "cgrjhj0jwec19p0rddistp691wy21dr0",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hBhcLQu3XsGMgyDRQk1LV0Y491tky50-9_77608za338ySjz1GdlVG73y0QP6SuIN6p3gbNQ21jDnpV9EYnfR2ilMvm_gV6mvrlTYxk4YCWEDpzwoBBTOI9ILIEgWgMcQQkNtBZcO4IKSTHwTIlZ7slyiVLbb69nuJTLk3GtVuK-nwBYLRB8w:1vfeBd:SLxoS_YTRKFt__3nUloFJ-ipxyiQs1Jo6QMeVJSWE34",
+    "expire_date": "2026-01-13T14:11:53.271Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "d1g3v9ja53tktzyjqa2smu0g2gt5w0z6",
+  "fields": {
+    "session_data": ".eJxVjDEOwjAMRe-SGUUkDoYwsnOGyHYcUkCp1LQT4u5QqQOs_733XybRMte0dJ3SkM3ZOLP73ZjkoW0F-U7tNloZ2zwNbFfFbrTb65j1edncv4NKvX5rEiQPB_SEEN0JGVldkT0girJCdo4kA5I4iB5COELhEoS9UAk-mvcH6cc4Rw:1vfEz3:KnNFQZHC7uPKXxCucQmgaIwycxQ6-bX3wO7RErdGCos",
+    "expire_date": "2026-01-12T11:17:13.654Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "du37vrs8tvcs0rir0ct2e6kcsn8xvvgk",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hBhcLQu3XsGMgyDRQk1LV0Y491tky50-9_77608za338ySjz1GdlVG73y0QP6SuIN6p3gbNQ21jDnpV9EYnfR2ilMvm_gV6mvrlTYxk4YCWEDpzwoBBTOI9ILIEgWgMcQQkNtBZcO4IKSTHwTIlZ7slyiVLbb69nuJTLk3GtVuK-nwBYLRB8w:1vfAWu:M75XENJBmHH-tH_whr2A1ejCItZVVOg66Kyi8uhWiyw",
+    "expire_date": "2026-01-12T06:31:52.794Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "g2eu6ljq522qe6kzavtf5xts94o7m98c",
+  "fields": {
+    "session_data": ".eJxVjDEOwjAMRe-SGUUkDoYwsnOGyHYcUkCp1LQT4u5QqQOs_733XybRMte0dJ3SkM3ZOLP73ZjkoW0F-U7tNloZ2zwNbFfFbrTb65j1edncv4NKvX5rEiQPB_SEEN0JGVldkT0girJCdo4kA5I4iB5COELhEoS9UAk-mvcH6cc4Rw:1vf0Eu:dKzBsMjbZ84DFKGpD_Gp34amciKjxA4gCBe32TugD0A",
+    "expire_date": "2026-01-11T19:32:36.912Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "gibmjt9ovbt0vpd40raghktpmj85ym1c",
+  "fields": {
+    "session_data": ".eJxVjDEOwjAMRe-SGUUkDoYwsnOGyHYcUkCp1LQT4u5QqQOs_733XybRMte0dJ3SkM3ZOLP73ZjkoW0F-U7tNloZ2zwNbFfFbrTb65j1edncv4NKvX5rEiQPB_SEEN0JGVldkT0girJCdo4kA5I4iB5COELhEoS9UAk-mvcH6cc4Rw:1vfAL5:yehRclg9yN934Hk5BYllmJ0Vc_wnaaiQ8h4KzRZoI2o",
+    "expire_date": "2026-01-12T06:19:39.373Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "h8vuwul8mi6h8x6i3f2ho65837s5s9f3",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hBhcLQu3XsGMgyDRQk1LV0Y491tky50-9_77608za338ySjz1GdlVG73y0QP6SuIN6p3gbNQ21jDnpV9EYnfR2ilMvm_gV6mvrlTYxk4YCWEDpzwoBBTOI9ILIEgWgMcQQkNtBZcO4IKSTHwTIlZ7slyiVLbb69nuJTLk3GtVuK-nwBYLRB8w:1vfxlY:_5NOp1NRAuEQtfWldu7TuXZaqzoIQ2O0fG12f9yFHkI",
+    "expire_date": "2026-01-14T11:06:16.717Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "hjhx7zgkvy4c6pud2eprswtvivwjqloe",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hBhcLQu3XsGMgyDRQk1LV0Y491tky50-9_77608za338ySjz1GdlVG73y0QP6SuIN6p3gbNQ21jDnpV9EYnfR2ilMvm_gV6mvrlTYxk4YCWEDpzwoBBTOI9ILIEgWgMcQQkNtBZcO4IKSTHwTIlZ7slyiVLbb69nuJTLk3GtVuK-nwBYLRB8w:1vfOwT:ViGUUa1dN_NX9QIQmqczV4g9GDupa271mCiQFvar5pg",
+    "expire_date": "2026-01-12T21:55:13.970Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "jtgdo4ao7hskn8xa9hjh3e2cc55gfs6s",
+  "fields": {
+    "session_data": ".eJxVjDEOwjAMRe-SGUUkDoYwsnOGyHYcUkCp1LQT4u5QqQOs_733XybRMte0dJ3SkM3ZOLP73ZjkoW0F-U7tNloZ2zwNbFfFbrTb65j1edncv4NKvX5rEiQPB_SEEN0JGVldkT0girJCdo4kA5I4iB5COELhEoS9UAk-mvcH6cc4Rw:1vfFkp:VzN_wLvL3thPvdyAheaL3plIH49ywRLDn1dyeiEQsko",
+    "expire_date": "2026-01-12T12:06:35.977Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "k4z5o4ezmltwa44nvv38u1znvkj4x5cf",
+  "fields": {
+    "session_data": ".eJxVjDEOwjAMRe-SGUUkDoYwsnOGyHYcUkCp1LQT4u5QqQOs_733XybRMte0dJ3SkM3ZOLP73ZjkoW0F-U7tNloZ2zwNbFfFbrTb65j1edncv4NKvX5rEiQPB_SEEN0JGVldkT0girJCdo4kA5I4iB5COELhEoS9UAk-mvcH6cc4Rw:1vgP9y:TUyAnJc28u5vlPDtiiCjT95JBHFYRJx8DEW9ZUzj4jo",
+    "expire_date": "2026-01-15T16:21:18.423Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "lldpklebhxq0nv166ovh79ztbz1pirh1",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hBhcLQu3XsGMgyDRQk1LV0Y491tky50-9_77608za338ySjz1GdlVG73y0QP6SuIN6p3gbNQ21jDnpV9EYnfR2ilMvm_gV6mvrlTYxk4YCWEDpzwoBBTOI9ILIEgWgMcQQkNtBZcO4IKSTHwTIlZ7slyiVLbb69nuJTLk3GtVuK-nwBYLRB8w:1vfMWs:nbw23WBQV3OOnc7hlvmI86qJ-Xz2HJEKMSN5M4AtgLY",
+    "expire_date": "2026-01-12T19:20:38.124Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "p382qick6kgmgvcm4mginh8ngcojc2ar",
+  "fields": {
+    "session_data": ".eJxVjDEOwjAMRe-SGUUkDoYwsnOGyHYcUkCp1LQT4u5QqQOs_733XybRMte0dJ3SkM3ZOLP73ZjkoW0F-U7tNloZ2zwNbFfFbrTb65j1edncv4NKvX5rEiQPB_SEEN0JGVldkT0girJCdo4kA5I4iB5COELhEoS9UAk-mvcH6cc4Rw:1vfiwd:EEWm7p_c9iKAZOn2s51v4TQ9JguisFrfB38Nj16MZ1E",
+    "expire_date": "2026-01-13T19:16:43.929Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "q35taa6g2nqgli7xoymiksenm8gvoebe",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hBhcLQu3XsGMgyDRQk1LV0Y491tky50-9_77608za338ySjz1GdlVG73y0QP6SuIN6p3gbNQ21jDnpV9EYnfR2ilMvm_gV6mvrlTYxk4YCWEDpzwoBBTOI9ILIEgWgMcQQkNtBZcO4IKSTHwTIlZ7slyiVLbb69nuJTLk3GtVuK-nwBYLRB8w:1vfWK9:hIgK56Q07KkGNsBwXnON28LFcxAYeOFAOQEzq_qpuug",
+    "expire_date": "2026-01-13T05:48:09.275Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "qrr466l5bskfxfbblo33egy76v0v24d8",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hBhcLQu3XsGMgyDRQk1LV0Y491tky50-9_77608za338ySjz1GdlVG73y0QP6SuIN6p3gbNQ21jDnpV9EYnfR2ilMvm_gV6mvrlTYxk4YCWEDpzwoBBTOI9ILIEgWgMcQQkNtBZcO4IKSTHwTIlZ7slyiVLbb69nuJTLk3GtVuK-nwBYLRB8w:1vfGdV:CCZCinmnLwKuBiOLCdsQsF_Oo5XnlPLJEU5Mfvw9iKk",
+    "expire_date": "2026-01-12T13:03:05.403Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "s1b8ad8fney0c958i08uri25gw0mgb97",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hBhcLQu3XsGMgyDRQk1LV0Y491tky50-9_77608za338ySjz1GdlVG73y0QP6SuIN6p3gbNQ21jDnpV9EYnfR2ilMvm_gV6mvrlTYxk4YCWEDpzwoBBTOI9ILIEgWgMcQQkNtBZcO4IKSTHwTIlZ7slyiVLbb69nuJTLk3GtVuK-nwBYLRB8w:1vf17N:yRsEHoFAfNDRvGOKsZyZj0z2Xz0VvJDhj4ZKHAND_l8",
+    "expire_date": "2026-01-11T20:28:53.336Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "xerj26z4k571sr7fa1jz9xf6klkic8yz",
+  "fields": {
+    "session_data": ".eJxVjDEOwjAMRe-SGUUkDoYwsnOGyHYcUkCp1LQT4u5QqQOs_733XybRMte0dJ3SkM3ZOLP73ZjkoW0F-U7tNloZ2zwNbFfFbrTb65j1edncv4NKvX5rEiQPB_SEEN0JGVldkT0girJCdo4kA5I4iB5COELhEoS9UAk-mvcH6cc4Rw:1vfOrp:JSacxWt4QM9FeLPDv4a8tX_Xf9mj9k3EUS-oUOmECF4",
+    "expire_date": "2026-01-12T21:50:25.602Z"
+  }
+},
+{
+  "model": "core.customuser",
+  "pk": 1,
+  "fields": {
+    "password": "pbkdf2_sha256$600000$YWRujgrLwwu6peVVuzk4MS$5qG/J3Ib9SrjY7vO4Zv8ro541hziVLAQyO24RGMj+3E=",
+    "last_login": "2026-01-15T15:20:57.931Z",
+    "is_superuser": true,
+    "first_name": "",
+    "last_name": "",
+    "email": "admin@example.com",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-01-07T17:35:23.359Z",
+    "username": "admin",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "core.client",
+  "pk": 1,
+  "fields": {
+    "created_at": "2026-01-07T17:44:04.921Z",
+    "updated_at": "2026-01-07T17:44:04.921Z",
+    "name": "a1",
+    "code": null,
+    "referred_by": null,
+    "is_company_client": false,
+    "user": null
+  }
+},
+{
+  "model": "core.client",
+  "pk": 2,
+  "fields": {
+    "created_at": "2026-01-07T18:25:34.795Z",
+    "updated_at": "2026-01-07T18:25:34.795Z",
+    "name": "a2",
+    "code": null,
+    "referred_by": null,
+    "is_company_client": false,
+    "user": null
+  }
+},
+{
+  "model": "core.client",
+  "pk": 42,
+  "fields": {
+    "created_at": "2026-01-12T09:23:06.690Z",
+    "updated_at": "2026-01-12T09:23:06.690Z",
+    "name": "VIJETHA",
+    "code": "VIJ77&EXC",
+    "referred_by": null,
+    "is_company_client": false,
+    "user": 1
+  }
+}
