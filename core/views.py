@@ -3369,6 +3369,12 @@ def transaction_delete(request, pk):
             if transaction.exchange_balance_before is not None:
                 account.exchange_balance = transaction.exchange_balance_before
             
+            # Adjust balances for auto-refunding entries that may not track before/after values
+            if transaction.type == 'FUNDING_AUTO':
+                auto_amount = transaction.amount or 0
+                account.funding = max(0, account.funding - auto_amount)
+                account.exchange_balance = max(0, account.exchange_balance - auto_amount)
+            
             # 2. Reset the PnL cycle. This is CRITICAL.
             # Deleting a transaction means the current share lock is potentially invalid.
             # We clear it so the next calculation uses the reverted balances.
