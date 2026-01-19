@@ -14,14 +14,33 @@ class ExchangeSerializer(serializers.ModelSerializer):
 class ClientExchangeAccountSerializer(serializers.ModelSerializer):
     client_name = serializers.CharField(source='client.name', read_only=True)
     exchange_name = serializers.CharField(source='exchange.name', read_only=True)
-    pnl = serializers.IntegerField(source='compute_client_pnl', read_only=True)
-    my_share = serializers.IntegerField(source='compute_my_share', read_only=True)
+    pnl = serializers.SerializerMethodField()
+    my_share = serializers.SerializerMethodField()
+    remaining_amount = serializers.SerializerMethodField()
+
+    def get_pnl(self, obj):
+        try:
+            return obj.compute_client_pnl()
+        except Exception as e:
+            return 0
+
+    def get_my_share(self, obj):
+        try:
+            return obj.compute_my_share()
+        except Exception as e:
+            return 0
+
+    def get_remaining_amount(self, obj):
+        try:
+            return obj.get_remaining_settlement_amount()['remaining']
+        except Exception as e:
+            return 0
 
     class Meta:
         model = ClientExchangeAccount
         fields = [
-            'id', 'client', 'client_name', 'exchange', 'exchange_name', 
-            'funding', 'exchange_balance', 'pnl', 'my_share',
+            'id', 'client', 'client_name', 'exchange', 'exchange_name',
+            'funding', 'exchange_balance', 'pnl', 'my_share', 'remaining_amount',
             'loss_share_percentage', 'profit_share_percentage'
         ]
 

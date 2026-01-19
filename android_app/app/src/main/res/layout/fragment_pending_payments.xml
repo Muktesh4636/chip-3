@@ -23,7 +23,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Two separate sections: Clients owe you vs You owe clients"
+            android:text="Manage and track all pending payments"
             android:textSize="14sp"
             android:textColor="@color/text_muted" />
 
@@ -89,40 +89,6 @@
 
         </androidx.cardview.widget.CardView>
 
-        <!-- Section Toggle Buttons -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginBottom="16dp">
-
-            <Button
-                android:id="@+id/btnClientsOwe"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Clients Owe You"
-                android:textSize="14sp"
-                android:backgroundTint="@color/primary"
-                android:textColor="@color/white"
-                android:layout_marginEnd="8dp"
-                android:padding="12dp"
-                app:cornerRadius="8dp" />
-
-            <Button
-                android:id="@+id/btnYouOwe"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="You Owe Clients"
-                android:textSize="14sp"
-                android:backgroundTint="@color/bg_card"
-                android:textColor="@color/text_main"
-                android:layout_marginStart="8dp"
-                android:padding="12dp"
-                app:cornerRadius="8dp" />
-
-        </LinearLayout>
 
         <!-- Export CSV Button -->
         <Button

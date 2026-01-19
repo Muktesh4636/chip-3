@@ -422,7 +422,7 @@ class TransactionsFragment : Fragment() {
 
                     // Filter by accountId if provided
                     if (accountId != -1) {
-                        transactions = transactions.filter { it.client_exchange_id == accountId }
+                        transactions = transactions.filter { it.client_exchange == accountId }
                     }
 
                     allTransactions = transactions

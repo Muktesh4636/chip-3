@@ -47,6 +47,7 @@ data class Account(
     val exchange_balance: Long,
     val pnl: Long,
     val my_share: Long,
+    val remaining_amount: Long = 0L,
     val loss_share_percentage: Int,
     val profit_share_percentage: Int
 )
@@ -75,7 +76,9 @@ data class PendingPaymentItem(
     val client_code: String? = null,
     val pnl: Long,
     val my_share: Long,
+    val funding: Long = 0L,
     val exchange_balance: Long = 0L,
+    val remaining_amount: Long = 0L,
     val type: String
 )
 
@@ -96,7 +99,8 @@ data class RecordPaymentRequest(
     val payment_direction: String,
     val notes: String,
     val update_exchange_balance: Boolean? = null,
-    val new_exchange_balance: Long? = null
+    val new_exchange_balance: Long? = null,
+    val re_add_capital: Boolean? = null
 )
 
 data class BulkTransactionAction(

@@ -94,14 +94,16 @@
 
         </androidx.cardview.widget.CardView>
 
-        <!-- Payment Direction -->
+        <!-- Payment Direction (Hidden - derived from PnL) -->
         <TextView
+            android:id="@+id/paymentDirectionLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Payment Direction *"
+            android:text="Payment Direction"
             android:textSize="16sp"
             android:textColor="@color/text_main"
-            android:layout_marginBottom="8dp" />
+            android:layout_marginBottom="8dp"
+            android:visibility="gone" />
 
         <Spinner
             android:id="@+id/paymentDirectionSpinner"
@@ -109,13 +111,15 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             android:background="@drawable/field_input_bg"
-            android:padding="4dp" />
+            android:padding="4dp"
+            android:visibility="gone" />
 
         <!-- Amount -->
         <TextView
+            android:id="@+id/amountLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Amount *"
+            android:text="Share Payment (in share units) *"
             android:textSize="16sp"
             android:textColor="@color/text_main"
             android:layout_marginBottom="8dp" />
@@ -125,37 +129,62 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:inputType="numberDecimal"
-            android:hint="Amount in rupees"
+            android:hint="Amount to settle"
             android:textSize="16sp"
             android:background="@drawable/field_input_bg"
             android:padding="12dp"
-            android:layout_marginBottom="16dp" />
+            android:layout_marginBottom="4dp" />
 
         <TextView
+            android:id="@+id/remainingAmountHint"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Amount in rupees"
+            android:text="Maximum: ₹0 (Remaining settlement amount)"
             android:textSize="12sp"
             android:textColor="@color/text_muted"
             android:layout_marginBottom="16dp" />
 
-        <!-- Update Exchange Balance -->
+        <!-- Update Exchange Balance (Hidden - automatic for settlements) -->
         <CheckBox
             android:id="@+id/updateBalanceCheckbox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Update Exchange Balance (Settlement)"
+            android:text="Update Exchange Balance"
             android:textSize="16sp"
             android:textColor="@color/text_main"
-            android:layout_marginBottom="8dp" />
+            android:layout_marginBottom="8dp"
+            android:visibility="gone" />
 
         <TextView
+            android:id="@+id/updateBalanceHint"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Check this if this payment settles the account (reduces PnL)"
+            android:text="Automatically updates exchange balance based on settlement"
             android:textSize="12sp"
             android:textColor="@color/text_muted"
-            android:layout_marginBottom="16dp" />
+            android:layout_marginBottom="16dp"
+            android:visibility="gone" />
+
+        <!-- Re-add Capital (only for loss cases) -->
+        <CheckBox
+            android:id="@+id/reAddCapitalCheckbox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Re-add Capital After Payment (Auto-refund)"
+            android:textSize="16sp"
+            android:textColor="@color/text_main"
+            android:layout_marginBottom="8dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/reAddCapitalHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Automatically refund the settlement amount back to funding (for loss accounts)"
+            android:textSize="12sp"
+            android:textColor="@color/text_muted"
+            android:layout_marginBottom="16dp"
+            android:visibility="gone" />
 
         <!-- New Exchange Balance -->
         <EditText

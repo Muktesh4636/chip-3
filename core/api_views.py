@@ -9,9 +9,10 @@ from decimal import Decimal
 from datetime import date, timedelta
 from .models import Client, Exchange, ClientExchangeAccount, Transaction, ClientExchangeReportConfig
 from .serializers import (
-    ClientSerializer, ExchangeSerializer, 
+    ClientSerializer, ExchangeSerializer,
     ClientExchangeAccountSerializer, TransactionSerializer
 )
+from .views import calculate_display_remaining
 
 @api_view(['GET', 'POST'])
 @permission_classes([permissions.IsAuthenticated])
@@ -94,36 +95,105 @@ def mobile_dashboard_summary(request):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def api_pending_payments(request):
-    """API endpoint for pending payments"""
-    accounts = ClientExchangeAccount.objects.filter(client__user=request.user)
-    
-    pending_list = []
+    """API endpoint for pending payments - must match website logic exactly"""
+    accounts = ClientExchangeAccount.objects.filter(client__user=request.user).select_related('client', 'exchange')
+
+    clients_owe_list = []
+    you_owe_list = []
     total_to_receive = 0
     total_to_pay = 0
-    
-    for acc in accounts:
-        client_pnl = acc.compute_client_pnl()
+
+    for client_exchange in accounts:
+        # Compute PnL BEFORE any updates
+        client_pnl = client_exchange.compute_client_pnl()
+
+        # Skip accounts with zero PnL
         if client_pnl == 0:
             continue
-            
-        my_share = acc.compute_my_share()
-        
-        item = {
-            'account_id': acc.id,
-            'client_name': acc.client.name,
-            'exchange_name': acc.exchange.name,
-            'pnl': client_pnl,
-            'my_share': my_share,
-            'type': 'RECEIVE' if client_pnl < 0 else 'PAY'
-        }
-        
-        if client_pnl < 0:
-            total_to_receive += abs(my_share)
-        else:
-            total_to_pay += abs(my_share)
-            
-        pending_list.append(item)
-        
+
+        # Determine case
+        is_loss_case = client_pnl < 0  # Client owes you (loss)
+        is_profit_case = client_pnl > 0  # You owe client (profit)
+
+        # Lock share and get settlement info (CRITICAL for MASKED SHARE SETTLEMENT SYSTEM)
+        client_exchange.lock_initial_share_if_needed()
+        settlement_info = client_exchange.get_remaining_settlement_amount()
+        initial_final_share = settlement_info['initial_final_share']
+        remaining_amount = settlement_info['remaining']
+
+        # Use initial locked share for display
+        final_share = initial_final_share if initial_final_share > 0 else client_exchange.compute_my_share()
+
+        # Get share percentage using helper method
+        share_pct = client_exchange.get_share_percentage(client_pnl)
+
+        # Calculate opening and available points for display
+        funding = Decimal(client_exchange.funding)
+        exchange_balance = Decimal(client_exchange.exchange_balance)
+
+        if is_loss_case:
+            # Client owes you (loss case)
+            total_loss = abs(client_pnl)
+            opening_points = total_loss
+            available_points = total_loss
+
+            # Calculate display remaining using website logic
+            display_remaining = calculate_display_remaining(client_pnl, remaining_amount)
+            remaining_display = abs(display_remaining) if display_remaining else 0
+
+            item = {
+                'account_id': client_exchange.id,
+                'client_name': client_exchange.client.name,
+                'client_code': client_exchange.client.code,
+                'exchange_name': client_exchange.exchange.name,
+                'funding': client_exchange.funding,
+                'exchange_balance': client_exchange.exchange_balance,
+                'pnl': client_pnl,
+                'my_share': final_share,
+                'type': 'RECEIVE',
+                'opening_points': opening_points,
+                'available_points': available_points,
+                'share_percentage': float(share_pct),
+                'remaining_amount': remaining_display,
+                'show_na': (final_share == 0)
+            }
+
+            clients_owe_list.append(item)
+            total_to_receive += remaining_display
+
+        elif is_profit_case:
+            # You owe client (profit case)
+            unpaid_profit = client_pnl
+            opening_points = unpaid_profit
+            available_points = unpaid_profit
+
+            # Calculate display remaining using website logic
+            display_remaining = calculate_display_remaining(client_pnl, remaining_amount)
+            remaining_display = abs(display_remaining) if display_remaining else 0
+
+            item = {
+                'account_id': client_exchange.id,
+                'client_name': client_exchange.client.name,
+                'client_code': client_exchange.client.code,
+                'exchange_name': client_exchange.exchange.name,
+                'funding': client_exchange.funding,
+                'exchange_balance': client_exchange.exchange_balance,
+                'pnl': client_pnl,
+                'my_share': final_share,
+                'type': 'PAY',
+                'opening_points': opening_points,
+                'available_points': available_points,
+                'share_percentage': float(share_pct),
+                'remaining_amount': remaining_display,
+                'show_na': (final_share == 0)
+            }
+
+            you_owe_list.append(item)
+            total_to_pay += remaining_display
+
+    # Combine lists for API response (filter out N.A items)
+    pending_list = [item for item in clients_owe_list + you_owe_list if not item.get('show_na', False)]
+
     return Response({
         'pending_payments': pending_list,
         'total_to_receive': total_to_receive,
@@ -187,28 +257,243 @@ def api_update_balance(request, account_id):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def api_record_payment(request, account_id):
+    """
+    API version of record_payment view - MUST follow EXACT same rules as website
+    Implements the complete MASKED SHARE SETTLEMENT SYSTEM
+    """
     try:
-        account = ClientExchangeAccount.objects.get(id=account_id, client__user=request.user)
-        amount_raw = str(request.data.get('amount', '0'))
-        amount = int(Decimal(amount_raw.replace(',', '')))
-        notes = request.data.get('notes', '')
-        
-        # Payment decreases balance
-        account.exchange_balance -= amount
-        account.save()
-        
-        Transaction.objects.create(
-            client_exchange=account,
-            date=timezone.now(),
-            type='RECORD_PAYMENT',
-            amount=amount,
-            funding_after=account.funding,
-            exchange_balance_after=account.exchange_balance,
-            notes=notes
-        )
-        return Response({'status': 'success'})
+        from django.db import transaction
+        from django.core.exceptions import ValidationError
+        from core.models import Settlement
+
+        # Debug logging
+        print(f"DEBUG API RECORD PAYMENT: account_id={account_id}")
+        print(f"DEBUG API RECORD PAYMENT DATA: {dict(request.data)}")
+
+        # Parse request data - handle both snake_case and camelCase
+        paid_amount_str = str(request.data.get('amount', '0')).strip()
+        paid_amount = int(Decimal(paid_amount_str.replace(',', '')))
+        payment_direction = request.data.get('payment_direction', request.data.get('paymentDirection', 'FROM_CLIENT'))
+        notes = request.data.get('notes', '').strip()
+
+        # Handle nullable boolean fields properly - check both snake_case and camelCase
+        update_exchange_balance = request.data.get('update_exchange_balance', request.data.get('updateExchangeBalance'))
+        if update_exchange_balance is not None:
+            update_exchange_balance = bool(update_exchange_balance)
+        else:
+            update_exchange_balance = False
+
+        new_exchange_balance = request.data.get('new_exchange_balance', request.data.get('newExchangeBalance'))
+
+        re_add_capital = request.data.get('re_add_capital', request.data.get('reAddCapital'))
+        if re_add_capital is not None:
+            re_add_capital = bool(re_add_capital)
+        else:
+            re_add_capital = False
+
+        print(f"DEBUG PARSED: amount={paid_amount}, direction={payment_direction}, update_balance={update_exchange_balance}, new_balance={new_exchange_balance}, re_add={re_add_capital}")
+
+        if paid_amount <= 0:
+            return Response({'error': 'Paid amount must be greater than zero'}, status=400)
+
+        # Use database row locking to prevent concurrent payment race conditions
+        with transaction.atomic():
+            # Lock the account row to prevent concurrent modifications
+            account = ClientExchangeAccount.objects.select_for_update().get(id=account_id, client__user=request.user)
+
+            # ============================================================
+            # SETTLEMENT FLOW - EXACT ORDER (NON-NEGOTIABLE) - SAME AS WEBSITE
+            # ============================================================
+
+            # 1. Read balances (lock row) - DONE above with select_for_update
+            funding_before = account.funding
+            exchange_before = account.exchange_balance
+
+            # 2. Compute PnL BEFORE update
+            client_pnl_before = account.compute_client_pnl()
+
+            # 3. Lock share (if needed)
+            account.lock_initial_share_if_needed()
+
+            # 4. Validate remaining
+            settlement_info = account.get_remaining_settlement_amount()
+            initial_final_share = settlement_info['initial_final_share']
+            remaining_amount = settlement_info['remaining']
+            overpaid_amount = settlement_info['overpaid']
+            total_settled = settlement_info['total_settled']
+
+            # If InitialFinalShare = 0, this is NOT a settlement - just record as regular payment
+            is_settlement = (initial_final_share > 0)
+
+            # Initialize variables that need to be accessible in return statement
+            cycle_closed = False
+            masked_capital = 0
+            transaction_amount = paid_amount
+            remaining_amount = settlement_info['remaining']  # Always available from settlement_info
+
+            if is_settlement:
+                # Full settlement logic for accounts with share > 0
+                print(f"DEBUG: Settlement payment (share={initial_final_share})")
+
+                # Validate against remaining settlement amount
+                if paid_amount > remaining_amount:
+                    return Response({
+                        'error': f'Paid amount ({paid_amount}) cannot exceed remaining settlement amount ({remaining_amount}). Initial share: {initial_final_share}, Already settled: {total_settled}'
+                    }, status=400)
+
+                # Check if PnL = 0 (trading flat, not settlement complete)
+                if client_pnl_before == 0:
+                    return Response({'error': 'Account PnL is zero (trading flat). No settlement needed'}, status=400)
+
+                # 5. Compute masked capital
+                masked_capital = account.compute_masked_capital(paid_amount)
+                if masked_capital == 0:
+                    return Response({'error': 'Cannot calculate masked capital. Initial final share is zero'}, status=400)
+
+            # Decide transaction sign BEFORE balance update - CRITICAL SAME AS WEBSITE
+            if client_pnl_before > 0:
+                # PROFIT CASE: YOU pay client → amount is NEGATIVE (your loss)
+                transaction_amount = -paid_amount
+            elif client_pnl_before < 0:
+                # LOSS CASE: Client pays YOU → amount is POSITIVE (your profit)
+                transaction_amount = paid_amount
+            else:
+                transaction_amount = 0
+
+            # 6. Validate and compute balance updates - SAME AS WEBSITE
+            if client_pnl_before < 0:
+                # LOSS CASE: Masked capital reduces Funding
+                if account.funding - int(masked_capital) < 0:
+                    return Response({
+                        'error': f'Cannot record payment. Funding would become negative (Current: {account.funding}, Masked Capital: {int(masked_capital)})'
+                    }, status=400)
+                funding_after_settlement = account.funding - int(masked_capital)
+                exchange_after_settlement = account.exchange_balance  # Unchanged
+            else:
+                # PROFIT CASE: Masked capital reduces Exchange Balance
+                if account.exchange_balance - int(masked_capital) < 0:
+                    return Response({
+                        'error': f'Cannot record payment. Exchange balance would become negative (Current: {account.exchange_balance}, Masked Capital: {int(masked_capital)})'
+                    }, status=400)
+                funding_after_settlement = account.funding  # Unchanged (CRITICAL RULE)
+                exchange_after_settlement = account.exchange_balance - int(masked_capital)
+
+            # Handle exchange balance update if specified (settlement payment)
+            if update_exchange_balance and new_exchange_balance is not None:
+                try:
+                    new_balance_str = str(new_exchange_balance).replace(',', '')
+                    new_balance = int(Decimal(new_balance_str))
+                    exchange_after_settlement = new_balance
+                except (ValueError, TypeError):
+                    return Response({'error': 'Invalid new exchange balance'}, status=400)
+
+            # 7. Update balances
+            account.funding = funding_after_settlement
+            account.exchange_balance = exchange_after_settlement
+            account.save()
+
+            # Create Settlement record - SAME AS WEBSITE
+            settlement = Settlement.objects.create(
+                client_exchange=account,
+                amount=paid_amount,
+                date=timezone.now(),
+                notes=notes or f"Payment recorded: {paid_amount}"
+            )
+
+            # Create RECORD_PAYMENT transaction with before/after balances - SAME AS WEBSITE
+            Transaction.objects.create(
+                client_exchange=account,
+                date=timezone.now(),
+                type='RECORD_PAYMENT',
+                amount=transaction_amount,  # CRITICAL: Signed amount for profit/loss reporting
+                funding_before=funding_before,
+                funding_after=funding_after_settlement,
+                exchange_balance_before=exchange_before,
+                exchange_balance_after=exchange_after_settlement,
+                notes=notes or f"Settlement share payment: {paid_amount}. Masked Capital: {int(masked_capital)}"
+            )
+
+            # 8. IF auto-refund enabled: Save FUNDING_AUTO transaction - SAME AS WEBSITE
+            cycle_closed = False
+            if re_add_capital and client_pnl_before < 0:
+                # Auto re-funding: Funding = Funding + MaskedCapital
+                funding_before_refund = account.funding
+                exchange_before_refund = account.exchange_balance
+
+                account.funding += int(masked_capital)
+                account.exchange_balance += int(masked_capital)
+                account.save()
+
+                # Create FUNDING_AUTO transaction
+                Transaction.objects.create(
+                    client_exchange=account,
+                    date=timezone.now(),
+                    type='FUNDING_AUTO',
+                    amount=int(masked_capital),
+                    funding_before=funding_before_refund,
+                    funding_after=account.funding,
+                    exchange_balance_before=exchange_before_refund,
+                    exchange_balance_after=account.exchange_balance,
+                    notes=f"Auto-refund after settlement: {int(masked_capital)}"
+                )
+                cycle_closed = True
+            else:
+                # Simple payment recording for accounts with share = 0
+                print(f"DEBUG: Regular payment recording (share=0)")
+
+                # For non-settlement payments, just update exchange balance based on payment direction
+                if payment_direction == 'FROM_CLIENT':
+                    # Client pays you - increase exchange balance
+                    account.exchange_balance += paid_amount
+                elif payment_direction == 'TO_CLIENT':
+                    # You pay client - decrease exchange balance
+                    if account.exchange_balance - paid_amount < 0:
+                        return Response({
+                            'error': f'Cannot record payment. Exchange balance would become negative (Current: {account.exchange_balance}, Payment: {paid_amount})'
+                        }, status=400)
+                    account.exchange_balance -= paid_amount
+
+                # Handle exchange balance update if specified
+                if update_exchange_balance and new_exchange_balance is not None:
+                    try:
+                        new_balance_str = str(new_exchange_balance).replace(',', '')
+                        new_balance = int(Decimal(new_balance_str))
+                        account.exchange_balance = new_balance
+                    except (ValueError, TypeError):
+                        return Response({'error': 'Invalid new exchange balance'}, status=400)
+
+                account.save()
+
+                # Create simple transaction record
+                transaction_amount = paid_amount if payment_direction == 'FROM_CLIENT' else -paid_amount
+                Transaction.objects.create(
+                    client_exchange=account,
+                    date=timezone.now(),
+                    type='RECORD_PAYMENT',
+                    amount=transaction_amount,
+                    funding_before=funding_before,
+                    funding_after=account.funding,
+                    exchange_balance_before=exchange_before,
+                    exchange_balance_after=account.exchange_balance,
+                    notes=notes or f"Payment recorded: {paid_amount}"
+                )
+                cycle_closed = False
+
+        return Response({
+            'status': 'success',
+            'settlement_completed': is_settlement and (paid_amount >= remaining_amount if is_settlement else False),
+            'cycle_closed': cycle_closed,
+            'remaining_amount': max(0, remaining_amount - paid_amount) if is_settlement else 0
+        })
+
+    except ClientExchangeAccount.DoesNotExist:
+        return Response({'error': 'Account not found'}, status=404)
+    except ValidationError as e:
+        return Response({'error': str(e)}, status=400)
     except Exception as e:
-        print(f"DEBUG API PAYMENT ERROR: {str(e)}")
+        print(f"DEBUG API RECORD PAYMENT ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return Response({'error': str(e)}, status=400)
 
 @api_view(['GET'])
@@ -549,17 +834,15 @@ class ClientExchangeAccountViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # For mobile app compatibility, allow access to all accounts
-        # TODO: Add proper user-based filtering for multi-user support
-        return ClientExchangeAccount.objects.all().select_related('client', 'exchange')
+        # Filter accounts by authenticated user for proper security
+        return ClientExchangeAccount.objects.filter(client__user=self.request.user).select_related('client', 'exchange')
 
 class TransactionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = TransactionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Temporarily removed user filtering for debugging mobile app
-        # return Transaction.objects.filter(
-        #     client_exchange__client__user=self.request.user
-        # ).order_by('-created_at', '-id')
-        return Transaction.objects.all().order_by('-created_at', '-id')
+        # Filter transactions by authenticated user for proper security
+        return Transaction.objects.filter(
+            client_exchange__client__user=self.request.user
+        ).order_by('-created_at', '-id')

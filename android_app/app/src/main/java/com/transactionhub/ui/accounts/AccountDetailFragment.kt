@@ -18,6 +18,7 @@ import com.transactionhub.utils.PrefManager
 import kotlinx.coroutines.launch
 
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -78,7 +79,7 @@ class AccountDetailFragment : Fragment() {
         }
 
         view.findViewById<Button>(R.id.btnPayment).setOnClickListener {
-            showTransactionDialog("Record Payment", actionType = "PAYMENT")
+            showPaymentDialog()
         }
 
         view.findViewById<Button>(R.id.btnAccSettings).setOnClickListener {
@@ -310,6 +311,125 @@ class AccountDetailFragment : Fragment() {
         }
         
         dialog.show()
+    }
+
+    private fun showPaymentDialog() {
+        val token = prefManager.getToken() ?: return
+        
+        lifecycleScope.launch {
+            try {
+                val response = apiService.getAccounts(ApiClient.getAuthToken(token))
+                if (response.isSuccessful) {
+                    val accounts = response.body() ?: emptyList()
+                    val account = accounts.find { it.id == accountId } ?: return@launch
+                    
+                    val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_record_payment, null)
+                    val dialog = AlertDialog.Builder(requireContext())
+                        .setView(dialogView)
+                        .create()
+
+                    dialogView.findViewById<TextView>(R.id.dialogTitle).text = "Record Payment: ${account.client_name}"
+                    
+                    // Set up account status info
+                    val statusText = "Funding: ₹${formatNumber(account.funding)}\n" +
+                                     "Exchange Balance: ₹${formatNumber(account.exchange_balance)}\n" +
+                                     "Client PnL: ₹${formatNumber(account.pnl)}\n" +
+                                     "My Share: ₹${formatNumber(account.my_share)}"
+                    dialogView.findViewById<TextView>(R.id.accountStatusText).text = statusText
+
+                    // Amount input - pre-fill with remaining amount
+                    val amountInput = dialogView.findViewById<EditText>(R.id.amountInput)
+                    amountInput.setText(account.remaining_amount.toString())
+
+                    // Set remaining amount hint
+                    val remainingHint = dialogView.findViewById<TextView>(R.id.remainingAmountHint)
+                    remainingHint.text = "Maximum: ₹${formatNumber(account.remaining_amount)} (Remaining settlement amount)"
+
+                    // Re-add capital checkbox (only for loss cases - when client owes you)
+                    val reAddCapitalCheckbox = dialogView.findViewById<CheckBox>(R.id.reAddCapitalCheckbox)
+                    val reAddCapitalHint = dialogView.findViewById<TextView>(R.id.reAddCapitalHint)
+
+                    if (account.pnl < 0) { // Client owes you (loss case)
+                        reAddCapitalCheckbox.visibility = View.VISIBLE
+                        reAddCapitalHint.visibility = View.VISIBLE
+                        reAddCapitalCheckbox.isChecked = true // Default to true as in website
+                    } else {
+                        reAddCapitalCheckbox.visibility = View.GONE
+                        reAddCapitalHint.visibility = View.GONE
+                        reAddCapitalCheckbox.isChecked = false
+                    }
+
+                    // Notes input
+                    val notesInput = dialogView.findViewById<EditText>(R.id.notesInput)
+
+                    dialogView.findViewById<Button>(R.id.btnCancel).setOnClickListener { dialog.dismiss() }
+                    dialogView.findViewById<Button>(R.id.btnSubmit).setOnClickListener {
+                        val amount = amountInput.text.toString()
+                        val reAddCapital = reAddCapitalCheckbox.isChecked
+                        val notes = notesInput.text.toString()
+
+                        if (amount.isEmpty()) {
+                            Toast.makeText(context, "Enter amount", Toast.LENGTH_SHORT).show()
+                            return@setOnClickListener
+                        }
+                        
+                        val paidAmount = amount.toLongOrNull() ?: 0
+                        if (paidAmount <= 0) {
+                            Toast.makeText(context, "Amount must be greater than zero", Toast.LENGTH_SHORT).show()
+                            return@setOnClickListener
+                        }
+
+                        if (account.remaining_amount > 0 && paidAmount > account.remaining_amount) {
+                            Toast.makeText(context, "Amount cannot exceed remaining settlement (₹${formatNumber(account.remaining_amount)})", Toast.LENGTH_SHORT).show()
+                            return@setOnClickListener
+                        }
+
+                        // Determine direction automatically for the API (though backend also does it)
+                        val direction = if (account.pnl < 0) 1 else 0
+
+                        submitPayment(amount, direction, reAddCapital, notes, dialog)
+                    }
+
+                    dialog.show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(context, "Error loading account data", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun submitPayment(amount: String, direction: Int, reAddCapital: Boolean, notes: String, dialog: AlertDialog) {
+        val token = prefManager.getToken() ?: return
+        val paymentDirection = if (direction == 0) "TO_CLIENT" else "FROM_CLIENT"
+
+        val request = RecordPaymentRequest(
+            amount = amount.toLong(),
+            payment_direction = paymentDirection,
+            notes = notes,
+            re_add_capital = if (reAddCapital) true else null
+        )
+
+        lifecycleScope.launch {
+            try {
+                val response = apiService.recordPayment(ApiClient.getAuthToken(token), accountId, request)
+                if (response.isSuccessful) {
+                    Toast.makeText(context, "Payment Recorded Successfully!", Toast.LENGTH_SHORT).show()
+                    dialog.dismiss()
+                    loadHistory()
+                } else {
+                    val errorBody = response.errorBody()?.string()
+                    Toast.makeText(context, "Error: $errorBody", Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun formatNumber(number: Long): String {
+        return String.format("%,d", number)
     }
 
     private fun submitTransaction(amount: String, notes: String, actionType: String, dialog: AlertDialog) {

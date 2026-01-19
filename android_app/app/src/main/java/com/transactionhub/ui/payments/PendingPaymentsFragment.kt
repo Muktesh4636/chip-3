@@ -34,11 +34,8 @@ class PendingPaymentsFragment : Fragment() {
     private lateinit var searchInput: EditText
     private lateinit var searchButton: Button
     private lateinit var clearSearchButton: Button
-    private lateinit var btnClientsOwe: Button
-    private lateinit var btnYouOwe: Button
     private lateinit var exportCsvButton: Button
 
-    private var currentSection = "clients_owe" // clients_owe or you_owe
     private var currentSearchQuery = ""
 
     override fun onCreateView(
@@ -61,8 +58,6 @@ class PendingPaymentsFragment : Fragment() {
         searchInput = view.findViewById(R.id.searchInput)
         searchButton = view.findViewById(R.id.searchButton)
         clearSearchButton = view.findViewById(R.id.clearSearchButton)
-        btnClientsOwe = view.findViewById(R.id.btnClientsOwe)
-        btnYouOwe = view.findViewById(R.id.btnYouOwe)
         exportCsvButton = view.findViewById(R.id.exportCsvButton)
 
         recyclerView = view.findViewById(R.id.pendingRecyclerView)
@@ -93,36 +88,11 @@ class PendingPaymentsFragment : Fragment() {
             loadPendingPayments()
         }
 
-        btnClientsOwe.setOnClickListener {
-            currentSection = "clients_owe"
-            updateSectionButtons()
-            loadPendingPayments()
-        }
-
-        btnYouOwe.setOnClickListener {
-            currentSection = "you_owe"
-            updateSectionButtons()
-            loadPendingPayments()
-        }
-
         exportCsvButton.setOnClickListener {
             exportCsv()
         }
     }
 
-    private fun updateSectionButtons() {
-        if (currentSection == "clients_owe") {
-            btnClientsOwe.setBackgroundColor(resources.getColor(R.color.primary, null))
-            btnClientsOwe.setTextColor(resources.getColor(android.R.color.white, null))
-            btnYouOwe.setBackgroundColor(resources.getColor(R.color.bg_card, null))
-            btnYouOwe.setTextColor(resources.getColor(R.color.text_main, null))
-        } else {
-            btnYouOwe.setBackgroundColor(resources.getColor(R.color.primary, null))
-            btnYouOwe.setTextColor(resources.getColor(android.R.color.white, null))
-            btnClientsOwe.setBackgroundColor(resources.getColor(R.color.bg_card, null))
-            btnClientsOwe.setTextColor(resources.getColor(R.color.text_main, null))
-        }
-    }
 
     private fun showPaymentDialog(item: PendingPaymentItem) {
         val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_record_payment, null)
@@ -130,33 +100,35 @@ class PendingPaymentsFragment : Fragment() {
             .setView(dialogView)
             .create()
 
-        dialogView.findViewById<TextView>(R.id.dialogTitle).text = "Record Payment: ${item.client_name} - ${item.exchange_name}"
+        dialogView.findViewById<TextView>(R.id.dialogTitle).text = "Record Payment: ${item.client_name}"
+        
+        // Set up account status info
+        val statusText = "Funding: ₹${formatNumber(item.funding ?: 0)}\n" +
+                         "Exchange Balance: ₹${formatNumber(item.exchange_balance ?: 0)}\n" +
+                         "Client PnL: ₹${formatNumber(item.pnl)}\n" +
+                         "My Share: ₹${formatNumber(item.my_share)}"
+        dialogView.findViewById<TextView>(R.id.accountStatusText).text = statusText
 
-        // Set up payment direction spinner
-        val paymentDirectionSpinner = dialogView.findViewById<Spinner>(R.id.paymentDirectionSpinner)
-        val directions = arrayOf("To Client (You Pay)", "From Client (You Receive)")
-        val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, directions)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        paymentDirectionSpinner.adapter = adapter
-
-        // Set default direction based on item type
-        val defaultDirection = if (item.type == "PAY") 0 else 1 // 0 = To Client, 1 = From Client
-        paymentDirectionSpinner.setSelection(defaultDirection)
-
-        // Amount input
+        // Amount input - pre-fill with remaining amount
         val amountInput = dialogView.findViewById<EditText>(R.id.amountInput)
-        amountInput.setText(Math.abs(item.my_share).toString())
+        amountInput.setText(item.remaining_amount.toString())
 
-        // Update exchange balance checkbox
-        val updateBalanceCheckbox = dialogView.findViewById<CheckBox>(R.id.updateBalanceCheckbox)
-        val newBalanceInput = dialogView.findViewById<EditText>(R.id.newBalanceInput)
+        // Set remaining amount hint
+        val remainingHint = dialogView.findViewById<TextView>(R.id.remainingAmountHint)
+        remainingHint.text = "Maximum: ₹${formatNumber(item.remaining_amount)} (Remaining settlement amount)"
 
-        updateBalanceCheckbox.setOnCheckedChangeListener { _, isChecked ->
-            newBalanceInput.visibility = if (isChecked) View.VISIBLE else View.GONE
-            if (isChecked) {
-                // Pre-fill with current balance (this would need to be fetched from API)
-                newBalanceInput.setText(item.exchange_balance.toString())
-            }
+        // Re-add capital checkbox (only for loss cases - when client owes you)
+        val reAddCapitalCheckbox = dialogView.findViewById<CheckBox>(R.id.reAddCapitalCheckbox)
+        val reAddCapitalHint = dialogView.findViewById<TextView>(R.id.reAddCapitalHint)
+
+        if (item.type == "RECEIVE") { // Client owes you (loss case)
+            reAddCapitalCheckbox.visibility = View.VISIBLE
+            reAddCapitalHint.visibility = View.VISIBLE
+            reAddCapitalCheckbox.isChecked = true // Default to true as in website
+        } else {
+            reAddCapitalCheckbox.visibility = View.GONE
+            reAddCapitalHint.visibility = View.GONE
+            reAddCapitalCheckbox.isChecked = false
         }
 
         // Notes input
@@ -164,29 +136,36 @@ class PendingPaymentsFragment : Fragment() {
 
         dialogView.findViewById<Button>(R.id.btnCancel).setOnClickListener { dialog.dismiss() }
         dialogView.findViewById<Button>(R.id.btnSubmit).setOnClickListener {
-            val direction = paymentDirectionSpinner.selectedItemPosition
             val amount = amountInput.text.toString()
-            val updateBalance = updateBalanceCheckbox.isChecked
-            val newBalance = if (updateBalance) newBalanceInput.text.toString() else ""
+            val reAddCapital = reAddCapitalCheckbox.isChecked
             val notes = notesInput.text.toString()
 
             if (amount.isEmpty()) {
                 Toast.makeText(context, "Enter amount", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-
-            if (updateBalance && newBalance.isEmpty()) {
-                Toast.makeText(context, "Enter new exchange balance", Toast.LENGTH_SHORT).show()
+            
+            val paidAmount = amount.toLongOrNull() ?: 0
+            if (paidAmount <= 0) {
+                Toast.makeText(context, "Amount must be greater than zero", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            submitPayment(item.account_id, amount, direction, updateBalance, newBalance, notes, dialog)
+            if (paidAmount > item.remaining_amount) {
+                Toast.makeText(context, "Amount cannot exceed remaining settlement (₹${formatNumber(item.remaining_amount)})", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            // Direction is automatic based on item.type (RECEIVE -> FROM_CLIENT, PAY -> TO_CLIENT)
+            val direction = if (item.type == "RECEIVE") 1 else 0
+
+            submitPayment(item.account_id, amount, direction, false, "", reAddCapital, notes, dialog)
         }
 
         dialog.show()
     }
 
-    private fun submitPayment(accountId: Int, amount: String, direction: Int, updateBalance: Boolean, newBalance: String, notes: String, dialog: AlertDialog) {
+    private fun submitPayment(accountId: Int, amount: String, direction: Int, updateBalance: Boolean, newBalance: String, reAddCapital: Boolean, notes: String, dialog: AlertDialog) {
         val token = prefManager.getToken() ?: return
 
         val paymentDirection = if (direction == 0) "TO_CLIENT" else "FROM_CLIENT" // 0 = To Client (You Pay), 1 = From Client (You Receive)
@@ -196,8 +175,11 @@ class PendingPaymentsFragment : Fragment() {
             payment_direction = paymentDirection,
             notes = notes,
             update_exchange_balance = if (updateBalance) true else null,
-            new_exchange_balance = if (updateBalance && newBalance.isNotEmpty()) newBalance.toLong() else null
+            new_exchange_balance = if (updateBalance && newBalance.isNotEmpty()) newBalance.toLong() else null,
+            re_add_capital = if (reAddCapital) true else null
         )
+
+        android.util.Log.d("PaymentDebug", "Sending payment request: accountId=$accountId, amount=$amount, direction=$paymentDirection, updateBalance=$updateBalance, newBalance=$newBalance, reAddCapital=$reAddCapital")
 
         lifecycleScope.launch {
             try {
@@ -205,9 +187,20 @@ class PendingPaymentsFragment : Fragment() {
                 if (response.isSuccessful) {
                     Toast.makeText(context, "Payment Recorded Successfully!", Toast.LENGTH_SHORT).show()
                     dialog.dismiss()
-                    loadPendingPayments()
+                    // Add a small delay to ensure backend processing is complete
+                    view?.postDelayed({
+                        loadPendingPayments()
+                    }, 500)
                 } else {
-                    Toast.makeText(context, "Error recording payment", Toast.LENGTH_SHORT).show()
+                    val errorBody = response.errorBody()?.string()
+                    val errorMessage = try {
+                        val errorJson = errorBody?.let { org.json.JSONObject(it) }
+                        errorJson?.getString("error") ?: "Unknown error"
+                    } catch (e: Exception) {
+                        errorBody ?: "Unknown error"
+                    }
+                    Toast.makeText(context, "Error: $errorMessage", Toast.LENGTH_LONG).show()
+                    android.util.Log.e("PaymentError", "Error recording payment: $errorBody")
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -221,23 +214,16 @@ class PendingPaymentsFragment : Fragment() {
 
         lifecycleScope.launch {
             try {
+                android.util.Log.d("PendingPayments", "Loading pending payments...")
                 val response = apiService.getPendingPayments(ApiClient.getAuthToken(token))
                 if (response.isSuccessful) {
                     val data = response.body()!!
+                    android.util.Log.d("PendingPayments", "Loaded ${data.pending_payments.size} pending payments")
                     toReceiveText.text = "₹${formatNumber(data.total_to_receive)}"
                     toPayText.text = "₹${formatNumber(data.total_to_pay)}"
 
-                    // Filter items based on current section and search query
+                    // Filter items based on search query
                     var filteredItems = data.pending_payments
-
-                    // Filter by section
-                    filteredItems = filteredItems.filter { item ->
-                        when (currentSection) {
-                            "clients_owe" -> item.type == "RECEIVE" // Clients owe you = you receive
-                            "you_owe" -> item.type == "PAY" // You owe clients = you pay
-                            else -> true
-                        }
-                    }
 
                     // Filter by search query
                     if (currentSearchQuery.isNotEmpty()) {
@@ -246,12 +232,18 @@ class PendingPaymentsFragment : Fragment() {
                             item.exchange_name.contains(currentSearchQuery, ignoreCase = true) ||
                             (item.client_code?.contains(currentSearchQuery, ignoreCase = true) == true)
                         }
+                        android.util.Log.d("PendingPayments", "After search filter: ${filteredItems.size} items")
                     }
 
                     adapter.updateItems(filteredItems)
+                    android.util.Log.d("PendingPayments", "Updated adapter with ${filteredItems.size} items")
+                } else {
+                    android.util.Log.e("PendingPayments", "Failed to load pending payments: ${response.code()}")
+                    Toast.makeText(context, "Failed to load pending payments", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                android.util.Log.e("PendingPayments", "Error loading pending payments", e)
                 Toast.makeText(context, "Error loading pending payments", Toast.LENGTH_SHORT).show()
             }
         }
@@ -306,7 +298,9 @@ class PendingPaymentsAdapter(
         holder.clientName.text = item.client_name
         holder.exchangeName.text = item.exchange_name
         holder.pnlLabel.text = "Client PnL: ₹${String.format("%,d", item.pnl)}"
-        holder.amount.text = "₹${String.format("%,d", Math.abs(item.my_share))}"
+        
+        // Show remaining amount to settle
+        holder.amount.text = "₹${String.format("%,d", item.remaining_amount)}"
         
         holder.itemView.setOnClickListener { onItemClick(item) }
         
