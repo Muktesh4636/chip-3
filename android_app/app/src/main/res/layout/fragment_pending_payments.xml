@@ -23,9 +23,120 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Money you need to receive or pay"
+            android:text="Two separate sections: Clients owe you vs You owe clients"
             android:textSize="14sp"
             android:textColor="@color/text_muted" />
+
+        <!-- Search Bar -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="@color/bg_card"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="12dp">
+
+                    <EditText
+                        android:id="@+id/searchInput"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="Search by client name, code, or exchange name..."
+                        android:textSize="14sp"
+                        android:background="@drawable/field_input_bg"
+                        android:padding="12dp"
+                        android:layout_marginEnd="12dp" />
+
+                    <Button
+                        android:id="@+id/searchButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Search"
+                        android:textSize="14sp"
+                        android:backgroundTint="@color/primary"
+                        android:textColor="@color/white"
+                        android:paddingHorizontal="16dp"
+                        android:paddingVertical="12dp"
+                        app:cornerRadius="8dp" />
+
+                </LinearLayout>
+
+                <Button
+                    android:id="@+id/clearSearchButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Clear"
+                    android:textSize="14sp"
+                    android:textColor="@color/text_main"
+                    android:backgroundTint="@android:color/transparent"
+                    android:visibility="gone"
+                    style="?android:attr/borderlessButtonStyle" />
+
+            </LinearLayout>
+
+        </androidx.cardview.widget.CardView>
+
+        <!-- Section Toggle Buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp">
+
+            <Button
+                android:id="@+id/btnClientsOwe"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Clients Owe You"
+                android:textSize="14sp"
+                android:backgroundTint="@color/primary"
+                android:textColor="@color/white"
+                android:layout_marginEnd="8dp"
+                android:padding="12dp"
+                app:cornerRadius="8dp" />
+
+            <Button
+                android:id="@+id/btnYouOwe"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="You Owe Clients"
+                android:textSize="14sp"
+                android:backgroundTint="@color/bg_card"
+                android:textColor="@color/text_main"
+                android:layout_marginStart="8dp"
+                android:padding="12dp"
+                app:cornerRadius="8dp" />
+
+        </LinearLayout>
+
+        <!-- Export CSV Button -->
+        <Button
+            android:id="@+id/exportCsvButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📥 Download CSV"
+            android:textSize="14sp"
+            android:backgroundTint="@color/success"
+            android:textColor="@color/white"
+            android:layout_marginBottom="16dp"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="10dp"
+            app:cornerRadius="8dp" />
 
         <LinearLayout
             android:layout_width="match_parent"

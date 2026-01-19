@@ -57,7 +57,7 @@ interface ApiService {
     suspend fun recordPayment(
         @Header("Authorization") token: String,
         @Path("id") id: Int,
-        @Body data: Map<String, String>
+        @Body request: RecordPaymentRequest
     ): Response<Map<String, Any>>
 
     @GET("api/reports-summary/")

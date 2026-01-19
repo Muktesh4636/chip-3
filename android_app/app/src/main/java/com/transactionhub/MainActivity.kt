@@ -89,7 +89,7 @@ class MainActivity : AppCompatActivity() {
                 true
             }
             R.id.menu_transactions -> {
-                loadFragment(TransactionsFragment())
+                loadFragment(TransactionsFragment.newInstance())
                 true
             }
             else -> super.onOptionsItemSelected(item)

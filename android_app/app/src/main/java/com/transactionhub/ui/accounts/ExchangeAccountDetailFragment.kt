@@ -11,7 +11,9 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.transactionhub.R
 import com.transactionhub.data.api.ApiService
+import com.transactionhub.data.models.RecordPaymentRequest
 import com.transactionhub.data.models.Transaction
+import com.transactionhub.ui.transactions.TransactionsFragment
 import com.transactionhub.utils.ApiClient
 import com.transactionhub.utils.PrefManager
 import kotlinx.coroutines.launch
@@ -89,6 +91,14 @@ class ExchangeAccountDetailFragment : Fragment() {
         val editFragment = EditPercentageFragment.newInstance(accountId, clientName, exchangeName)
         parentFragmentManager.beginTransaction()
             .replace(R.id.fragmentContainer, editFragment)
+            .addToBackStack(null)
+            .commit()
+    }
+
+    private fun navigateToTransactions() {
+        val fragment = TransactionsFragment.newInstance(accountId)
+        parentFragmentManager.beginTransaction()
+            .replace(R.id.fragmentContainer, fragment)
             .addToBackStack(null)
             .commit()
     }
@@ -226,6 +236,10 @@ class ExchangeAccountDetailFragment : Fragment() {
                 navigateToEditPercentage()
             }
 
+            view.findViewById<Button>(R.id.btnViewAllTransactions)?.setOnClickListener {
+                navigateToTransactions()
+            }
+
             view.findViewById<Button>(R.id.btnBackToClient)?.setOnClickListener {
                 parentFragmentManager.popBackStack()
             }
@@ -274,7 +288,14 @@ class ExchangeAccountDetailFragment : Fragment() {
                 val response = when (actionType) {
                     "FUNDING" -> apiService.addFunding(ApiClient.getAuthToken(token), accountId, data)
                     "BALANCE" -> apiService.updateBalance(ApiClient.getAuthToken(token), accountId, data)
-                    "PAYMENT" -> apiService.recordPayment(ApiClient.getAuthToken(token), accountId, data)
+                    "PAYMENT" -> {
+                        val request = RecordPaymentRequest(
+                            amount = amount.toLong(),
+                            payment_direction = "FROM_CLIENT", // Default for general payments
+                            notes = notes
+                        )
+                        apiService.recordPayment(ApiClient.getAuthToken(token), accountId, request)
+                    }
                     else -> null
                 }
 

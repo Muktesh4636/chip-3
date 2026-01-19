@@ -667,6 +667,7 @@
                         android:textStyle="bold" />
 
                     <Button
+                        android:id="@+id/btnViewAllTransactions"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="View All"

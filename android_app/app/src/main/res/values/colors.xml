@@ -24,6 +24,7 @@
     <color name="info">#06B6D4</color>
     <color name="success_soft">#DCFCE7</color>
     <color name="danger_soft">#FEE2E2</color>
+    <color name="warning_soft">#FEF3C7</color>
     
     <!-- Misc -->
     <color name="white">#FFFFFF</color>

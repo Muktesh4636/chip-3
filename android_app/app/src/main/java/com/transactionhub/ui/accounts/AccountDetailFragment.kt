@@ -11,6 +11,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.transactionhub.R
 import com.transactionhub.data.api.ApiService
+import com.transactionhub.data.models.RecordPaymentRequest
 import com.transactionhub.ui.transactions.TransactionsAdapter
 import com.transactionhub.utils.ApiClient
 import com.transactionhub.utils.PrefManager
@@ -313,14 +314,26 @@ class AccountDetailFragment : Fragment() {
 
     private fun submitTransaction(amount: String, notes: String, actionType: String, dialog: AlertDialog) {
         val token = prefManager.getToken() ?: return
-        val data = mapOf("amount" to amount, "notes" to notes)
-        
+
         lifecycleScope.launch {
             try {
                 val response = when (actionType) {
-                    "FUNDING" -> apiService.addFunding(ApiClient.getAuthToken(token), accountId, data)
-                    "BALANCE" -> apiService.updateBalance(ApiClient.getAuthToken(token), accountId, data)
-                    "PAYMENT" -> apiService.recordPayment(ApiClient.getAuthToken(token), accountId, data)
+                    "FUNDING" -> {
+                        val data = mapOf("amount" to amount, "notes" to notes)
+                        apiService.addFunding(ApiClient.getAuthToken(token), accountId, data)
+                    }
+                    "BALANCE" -> {
+                        val data = mapOf("amount" to amount, "notes" to notes)
+                        apiService.updateBalance(ApiClient.getAuthToken(token), accountId, data)
+                    }
+                    "PAYMENT" -> {
+                        val request = RecordPaymentRequest(
+                            amount = amount.toLong(),
+                            payment_direction = "FROM_CLIENT", // Default for general payments
+                            notes = notes
+                        )
+                        apiService.recordPayment(ApiClient.getAuthToken(token), accountId, request)
+                    }
                     else -> null
                 }
                 

@@ -6,7 +6,7 @@
         android:id="@+id/menu_profile"
         android:icon="@android:drawable/ic_menu_help"
         android:title="Profile &amp; Settings"
-        app:showAsAction="ifRoom" />
+        app:showAsAction="never" />
 
     <item
         android:id="@+id/menu_transactions"

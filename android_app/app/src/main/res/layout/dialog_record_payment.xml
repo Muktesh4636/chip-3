@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/bg_page">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <!-- Title -->
+        <TextView
+            android:id="@+id/dialogTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Record Payment"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_main"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Account Status Info -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="8dp"
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="@color/bg_card"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Current Account Status"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_main"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:id="@+id/accountStatusText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Funding: ₹0\nExchange Balance: ₹0\nClient PnL: ₹0\nMy Share: ₹0"
+                    android:textSize="13sp"
+                    android:textColor="@color/text_muted"
+                    android:layout_marginBottom="8dp" />
+
+            </LinearLayout>
+
+        </androidx.cardview.widget.CardView>
+
+        <!-- Payment Info -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="8dp"
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="@color/warning_soft"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="💰 Payment Recording"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/warning"
+                    android:layout_marginBottom="4dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="This records the payment in the audit trail. Optionally, you can update the exchange balance if this is a settlement payment."
+                    android:textSize="13sp"
+                    android:textColor="@color/warning" />
+
+            </LinearLayout>
+
+        </androidx.cardview.widget.CardView>
+
+        <!-- Payment Direction -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Payment Direction *"
+            android:textSize="16sp"
+            android:textColor="@color/text_main"
+            android:layout_marginBottom="8dp" />
+
+        <Spinner
+            android:id="@+id/paymentDirectionSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/field_input_bg"
+            android:padding="4dp" />
+
+        <!-- Amount -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Amount *"
+            android:textSize="16sp"
+            android:textColor="@color/text_main"
+            android:layout_marginBottom="8dp" />
+
+        <EditText
+            android:id="@+id/amountInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="numberDecimal"
+            android:hint="Amount in rupees"
+            android:textSize="16sp"
+            android:background="@drawable/field_input_bg"
+            android:padding="12dp"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Amount in rupees"
+            android:textSize="12sp"
+            android:textColor="@color/text_muted"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Update Exchange Balance -->
+        <CheckBox
+            android:id="@+id/updateBalanceCheckbox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Update Exchange Balance (Settlement)"
+            android:textSize="16sp"
+            android:textColor="@color/text_main"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Check this if this payment settles the account (reduces PnL)"
+            android:textSize="12sp"
+            android:textColor="@color/text_muted"
+            android:layout_marginBottom="16dp" />
+
+        <!-- New Exchange Balance -->
+        <EditText
+            android:id="@+id/newBalanceInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="numberDecimal"
+            android:hint="New exchange balance after payment"
+            android:textSize="16sp"
+            android:background="@drawable/field_input_bg"
+            android:padding="12dp"
+            android:layout_marginBottom="8dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Enter the new exchange balance after this payment"
+            android:textSize="12sp"
+            android:textColor="@color/text_muted"
+            android:layout_marginBottom="16dp"
+            android:visibility="gone" />
+
+        <!-- Notes -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Notes (Optional)"
+            android:textSize="16sp"
+            android:textColor="@color/text_main"
+            android:layout_marginBottom="8dp" />
+
+        <EditText
+            android:id="@+id/notesInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="textMultiLine"
+            android:hint="Optional notes about this payment"
+            android:textSize="16sp"
+            android:background="@drawable/field_input_bg"
+            android:padding="12dp"
+            android:minLines="2"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Action Buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="end">
+
+            <Button
+                android:id="@+id/btnCancel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Cancel"
+                android:textSize="16sp"
+                android:textColor="@color/text_main"
+                android:backgroundTint="@android:color/transparent"
+                android:layout_marginEnd="12dp"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="10dp"
+                style="?android:attr/borderlessButtonStyle" />
+
+            <Button
+                android:id="@+id/btnSubmit"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Record Payment"
+                android:textSize="16sp"
+                android:backgroundTint="@color/primary"
+                android:textColor="@color/white"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="10dp"
+                app:cornerRadius="8dp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</ScrollView>

@@ -72,8 +72,10 @@ data class PendingPaymentItem(
     val account_id: Int,
     val client_name: String,
     val exchange_name: String,
+    val client_code: String? = null,
     val pnl: Long,
     val my_share: Long,
+    val exchange_balance: Long = 0L,
     val type: String
 )
 
@@ -87,6 +89,14 @@ data class PendingPaymentsResponse(
 data class EditTransactionRequest(
     val amount: Long,
     val notes: String? = null
+)
+
+data class RecordPaymentRequest(
+    val amount: Long,
+    val payment_direction: String,
+    val notes: String,
+    val update_exchange_balance: Boolean? = null,
+    val new_exchange_balance: Long? = null
 )
 
 data class BulkTransactionAction(

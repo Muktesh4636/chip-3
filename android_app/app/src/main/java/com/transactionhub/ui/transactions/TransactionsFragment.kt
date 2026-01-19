@@ -26,7 +26,23 @@ class TransactionsFragment : Fragment() {
     private lateinit var recyclerView: RecyclerView
     private lateinit var adapter: TransactionsAdapter
     private var allTransactions: List<Transaction> = emptyList()
+    private var accountId: Int = -1
+
+    companion object {
+        fun newInstance(accountId: Int = -1): TransactionsFragment {
+            val fragment = TransactionsFragment()
+            val args = Bundle()
+            args.putInt("accountId", accountId)
+            fragment.arguments = args
+            return fragment
+        }
+    }
     
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        accountId = arguments?.getInt("accountId") ?: -1
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -397,12 +413,19 @@ class TransactionsFragment : Fragment() {
     
     private fun loadTransactions() {
         val token = prefManager.getToken() ?: return
-        
+
         lifecycleScope.launch {
             try {
                 val response = apiService.getTransactions(ApiClient.getAuthToken(token))
                 if (response.isSuccessful) {
-                    allTransactions = response.body() ?: emptyList()
+                    var transactions = response.body() ?: emptyList()
+
+                    // Filter by accountId if provided
+                    if (accountId != -1) {
+                        transactions = transactions.filter { it.client_exchange_id == accountId }
+                    }
+
+                    allTransactions = transactions
                     adapter.updateTransactions(allTransactions)
                 }
             } catch (e: Exception) {
