@@ -11,6 +11,19 @@ import logging
 logger = logging.getLogger('core.security')
 
 
+class RequestLoggingMiddleware(MiddlewareMixin):
+    """Log all requests and responses for debugging."""
+    def process_request(self, request):
+        logger.info(f"REQUEST: {request.method} {request.path}")
+        return None
+
+    def process_response(self, request, response):
+        logger.info(f"RESPONSE: {response.status_code} {request.path}")
+        if response.status_code == 500:
+            logger.error(f"500 ERROR at {request.path}")
+        return response
+
+
 class RateLimitMiddleware(MiddlewareMixin):
     """
     Rate limiting middleware to prevent abuse.

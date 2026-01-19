@@ -12,7 +12,8 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class AccountTransactionAdapter(
-    private var transactions: List<Transaction> = emptyList()
+    private var transactions: List<Transaction> = emptyList(),
+    private val onDeleteClick: ((Transaction) -> Unit)? = null
 ) : RecyclerView.Adapter<AccountTransactionAdapter.TransactionViewHolder>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): TransactionViewHolder {
@@ -23,7 +24,7 @@ class AccountTransactionAdapter(
 
     override fun onBindViewHolder(holder: TransactionViewHolder, position: Int) {
         val transaction = transactions[position]
-        holder.bind(transaction, position == 0) // Only show delete button for first (latest) transaction
+        holder.bind(transaction, position == 0, onDeleteClick) // Only show delete button for first (latest) transaction
     }
 
     override fun getItemCount(): Int = transactions.size
@@ -41,7 +42,7 @@ class AccountTransactionAdapter(
         private val notesText: TextView = itemView.findViewById(R.id.transactionNotes)
         private val deleteButton: Button = itemView.findViewById(R.id.btnDeleteTransaction)
 
-        fun bind(transaction: Transaction, isLatest: Boolean) {
+        fun bind(transaction: Transaction, isLatest: Boolean, onDeleteClick: ((Transaction) -> Unit)?) {
             try {
                 // Format date safely - transaction.date is a String from API
                 val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
@@ -93,13 +94,7 @@ class AccountTransactionAdapter(
                 // Delete button only for latest transaction
                 deleteButton.visibility = if (isLatest) View.VISIBLE else View.GONE
                 deleteButton.setOnClickListener {
-                    // TODO: Implement delete functionality
-                    // For now, just show a toast
-                    android.widget.Toast.makeText(
-                        itemView.context,
-                        "Delete transaction - Coming Soon",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
+                    onDeleteClick?.invoke(transaction)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()

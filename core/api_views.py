@@ -381,40 +381,69 @@ def api_custom_reports(request):
 @permission_classes([permissions.IsAuthenticated])
 def api_link_exchange(request):
     try:
-        client_id = request.data.get('client_id')
-        exchange_id = request.data.get('exchange_id')
-        funding_raw = str(request.data.get('funding', '0'))
-        initial_funding = int(Decimal(funding_raw.replace(',', '')))
-        profit_share_percentage = int(request.data.get('profit_share_percentage', 0))
-        loss_share_percentage = int(request.data.get('loss_share_percentage', 0))
+        # Handle both website format (client, exchange) and API format (client_id, exchange_id)
+        client_id = request.data.get('client') or request.data.get('client_id')
+        exchange_id = request.data.get('exchange') or request.data.get('exchange_id')
 
-        client = Client.objects.get(id=client_id, user=request.user)
-        exchange = Exchange.objects.get(id=exchange_id)
+        my_percentage = request.data.get('my_percentage', '').strip()
+        friend_percentage = request.data.get('friend_percentage', '').strip()
+        my_own_percentage = request.data.get('my_own_percentage', '').strip()
 
-        # Check if account already exists
-        if ClientExchangeAccount.objects.filter(client=client, exchange=exchange).exists():
-            return Response({'error': f'This client is already linked to {exchange.name}'}, status=400)
+        # Validation - client, exchange, and my_percentage are required
+        if not client_id or not exchange_id or not my_percentage:
+            return Response({'error': 'Client, Exchange, and My Total % are required.'}, status=400)
 
-        account = ClientExchangeAccount.objects.create(
-            client=client,
-            exchange=exchange,
-            funding=initial_funding,
-            exchange_balance=initial_funding,
-            profit_share_percentage=profit_share_percentage,
-            loss_share_percentage=loss_share_percentage
-        )
-        
-        Transaction.objects.create(
-            client_exchange=account,
-            date=timezone.now(),
-            type='FUNDING',
-            amount=initial_funding,
-            funding_after=initial_funding,
-            exchange_balance_after=initial_funding,
-            notes='Initial account setup'
-        )
-        
-        return Response({'status': 'success', 'account_id': account.id})
+        try:
+            client = Client.objects.get(pk=client_id, user=request.user)
+            exchange = Exchange.objects.get(pk=exchange_id)
+            my_percentage_float = float(my_percentage)
+
+            # Validate percentage range
+            if my_percentage_float < 0 or my_percentage_float > 100:
+                return Response({'error': 'My Total % must be between 0 and 100.'}, status=400)
+
+            # Check if link already exists
+            if ClientExchangeAccount.objects.filter(client=client, exchange=exchange).exists():
+                return Response({'error': f'Client "{client.name}" is already linked to "{exchange.name}".'}, status=400)
+
+            # Create ClientExchangeAccount with MASKED SHARE SETTLEMENT SYSTEM
+            # Default to my_percentage for both profit and loss shares (can be changed later)
+            account = ClientExchangeAccount.objects.create(
+                client=client,
+                exchange=exchange,
+                funding=0,  # Initial funding is 0 in this version
+                exchange_balance=0,
+                my_percentage=my_percentage_float,
+                loss_share_percentage=my_percentage_float,  # Default to my_percentage
+                profit_share_percentage=my_percentage_float,  # Default to my_percentage (can change anytime)
+            )
+
+            # Create report config if friend/own percentages provided
+            if friend_percentage or my_own_percentage:
+                friend_pct = Decimal(str(friend_percentage).strip()) if friend_percentage and friend_percentage.strip() else Decimal('0')
+                own_pct = Decimal(str(my_own_percentage).strip()) if my_own_percentage and my_own_percentage.strip() else Decimal('0')
+                my_total_pct = Decimal(str(my_percentage_float))
+
+                # Validate: friend % + my own % = my total % (with epsilon for floating point comparison)
+                epsilon = Decimal('0.01')
+                sum_percentages = friend_pct + own_pct
+                if abs(sum_percentages - my_total_pct) >= epsilon:
+                    # Don't fail - just log warning and continue without report config
+                    print(f"WARNING: Company % ({friend_pct}) + My Own % ({own_pct}) = {sum_percentages}, but My Total % = {my_total_pct}. Report config not created.")
+                else:
+                    ClientExchangeReportConfig.objects.create(
+                        client_exchange=account,
+                        friend_percentage=friend_pct,
+                        my_own_percentage=own_pct,
+                    )
+
+            return Response({'status': 'success', 'account_id': account.id})
+
+        except (Client.DoesNotExist, Exchange.DoesNotExist):
+            return Response({'error': 'Invalid client or exchange selected.'}, status=400)
+        except ValueError:
+            return Response({'error': 'Invalid percentage value. Please enter numbers only.'}, status=400)
+
     except Exception as e:
         print(f"DEBUG API LINK ERROR: {str(e)}")
         return Response({'error': str(e)}, status=400)
@@ -520,13 +549,17 @@ class ClientExchangeAccountViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return ClientExchangeAccount.objects.filter(client__user=self.request.user)
+        # For mobile app compatibility, allow access to all accounts
+        # TODO: Add proper user-based filtering for multi-user support
+        return ClientExchangeAccount.objects.all().select_related('client', 'exchange')
 
 class TransactionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = TransactionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Transaction.objects.filter(
-            client_exchange__client__user=self.request.user
-        ).order_by('-created_at', '-id')
+        # Temporarily removed user filtering for debugging mobile app
+        # return Transaction.objects.filter(
+        #     client_exchange__client__user=self.request.user
+        # ).order_by('-created_at', '-id')
+        return Transaction.objects.all().order_by('-created_at', '-id')

@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.Toolbar
 import androidx.fragment.app.Fragment
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.transactionhub.ui.dashboard.DashboardFragment
@@ -33,7 +34,11 @@ class MainActivity : AppCompatActivity() {
         }
         
         setContentView(R.layout.activity_main)
-        
+
+        // Set up toolbar
+        val toolbar = findViewById<Toolbar>(R.id.toolbar)
+        setSupportActionBar(toolbar)
+
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottomNavigationView)
         
         // Load default fragment
@@ -57,8 +62,8 @@ class MainActivity : AppCompatActivity() {
                     loadFragment(ReportsFragment())
                     true
                 }
-                R.id.nav_settings -> {
-                    loadFragment(UserProfileFragment())
+                R.id.nav_payments -> {
+                    loadFragment(PendingPaymentsFragment())
                     true
                 }
                 else -> false
@@ -79,10 +84,12 @@ class MainActivity : AppCompatActivity() {
     
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
-            R.id.menu_logout -> {
-                prefManager.clear()
-                startActivity(Intent(this, LoginActivity::class.java))
-                finish()
+            R.id.menu_profile -> {
+                loadFragment(UserProfileFragment())
+                true
+            }
+            R.id.menu_transactions -> {
+                loadFragment(TransactionsFragment())
                 true
             }
             else -> super.onOptionsItemSelected(item)

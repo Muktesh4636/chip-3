@@ -85,6 +85,14 @@ class ExchangeAccountDetailFragment : Fragment() {
         }
     }
 
+    private fun navigateToEditPercentage() {
+        val editFragment = EditPercentageFragment.newInstance(accountId, clientName, exchangeName)
+        parentFragmentManager.beginTransaction()
+            .replace(R.id.fragmentContainer, editFragment)
+            .addToBackStack(null)
+            .commit()
+    }
+
     private fun loadAccountDetails(view: View) {
         val token = prefManager.getToken()
         if (token == null) {
@@ -112,10 +120,32 @@ class ExchangeAccountDetailFragment : Fragment() {
                             null
                         ))
 
+                        // Update Account Information section
+                        view.findViewById<TextView>(R.id.clientInfoValue)?.text = "${account.client_name} (${account.client})"
+                        view.findViewById<TextView>(R.id.exchangeInfoValue)?.text = "${account.exchange_name} (${account.exchange})"
+                        view.findViewById<TextView>(R.id.myTotalPercentageValue)?.text = "${account.loss_share_percentage}%"
+                        view.findViewById<TextView>(R.id.lossSharePercentageValue)?.text = "${account.loss_share_percentage}%"
+                        view.findViewById<TextView>(R.id.profitSharePercentageValue)?.text = "${account.profit_share_percentage}%"
+                        // TODO: Add created and updated dates when available in API
+
                         val share = account.my_share
-                        // Update My Share value
-                        val myShareView = view.findViewById<TextView>(R.id.myShareValue)
-                        myShareView?.text = if (share == 0L) "₹0" else "₹${String.format("%,d", share)}"
+                        // Update Final Share value (was My Share)
+                        val finalShareView = view.findViewById<TextView>(R.id.finalShareValue)
+                        finalShareView?.text = if (share == 0L) "₹0" else "₹${String.format("%,d", share)}"
+
+                        // Update Share Percentage
+                        val sharePercentageView = view.findViewById<TextView>(R.id.sharePercentageValue)
+                        if (pnl < 0L) {
+                            sharePercentageView?.text = "${account.loss_share_percentage}% (Loss)"
+                        } else if (pnl > 0L) {
+                            sharePercentageView?.text = "${account.profit_share_percentage}% (Profit)"
+                        } else {
+                            sharePercentageView?.text = "${account.loss_share_percentage}%"
+                        }
+
+                        // TODO: Calculate and display remaining settlement
+                        val remainingSettlementView = view.findViewById<TextView>(R.id.remainingSettlementValue)
+                        remainingSettlementView?.text = "₹${String.format("%,d", share)}" // Placeholder - needs actual calculation
 
                         // Load report config to get detailed share breakdown
                         loadReportConfig(view, accountId, share)
@@ -156,7 +186,9 @@ class ExchangeAccountDetailFragment : Fragment() {
                         val recyclerView = view.findViewById<RecyclerView>(R.id.transactionsRecyclerView)
                         if (recyclerView?.adapter == null) {
                             recyclerView?.layoutManager = LinearLayoutManager(requireContext())
-                            recyclerView?.adapter = AccountTransactionAdapter(accountTransactions)
+                            recyclerView?.adapter = AccountTransactionAdapter(accountTransactions) { transaction ->
+                                deleteTransaction(transaction)
+                            }
                         } else {
                             (recyclerView.adapter as? AccountTransactionAdapter)?.updateTransactions(accountTransactions)
                         }
@@ -187,7 +219,11 @@ class ExchangeAccountDetailFragment : Fragment() {
             }
 
             view.findViewById<Button>(R.id.btnEditPercentage)?.setOnClickListener {
-                showEditPercentageDialog()
+                navigateToEditPercentage()
+            }
+
+            view.findViewById<Button>(R.id.btnEditPercentageSmall)?.setOnClickListener {
+                navigateToEditPercentage()
             }
 
             view.findViewById<Button>(R.id.btnBackToClient)?.setOnClickListener {
@@ -265,59 +301,40 @@ class ExchangeAccountDetailFragment : Fragment() {
         }
     }
 
-    private fun showEditPercentageDialog() {
-        val token = prefManager.getToken() ?: return
+    private fun deleteTransaction(transaction: Transaction) {
+        val alertDialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("Delete Transaction")
+            .setMessage("Are you sure you want to delete this transaction? This will revert account balances to the state before this transaction.")
+            .setPositiveButton("Delete") { _, _ ->
+                performTransactionDelete(transaction)
+            }
+            .setNegativeButton("Cancel", null)
+            .create()
+
+        alertDialog.show()
+    }
+
+    private fun performTransactionDelete(transaction: Transaction) {
+        val token = prefManager.getToken()
+        if (token == null) {
+            Toast.makeText(context, "Authentication required", Toast.LENGTH_SHORT).show()
+            return
+        }
 
         lifecycleScope.launch {
             try {
-                val response = apiService.getReportConfig(ApiClient.getAuthToken(token), accountId)
+                val response = apiService.deleteTransaction(ApiClient.getAuthToken(token), transaction.id)
                 if (response.isSuccessful) {
-                    val config = response.body() ?: return@launch
-                    val friendPct = config["friend_percentage"] as? Double ?: 0.0
-                    val myOwnPct = config["my_own_percentage"] as? Double ?: 0.0
-                    val totalShare = config["my_total_percentage"] as? Double ?: 0.0
-
-                    val dialogView = android.view.LayoutInflater.from(requireContext()).inflate(R.layout.dialog_report_config, null)
-                    val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
-                        .setView(dialogView)
-                        .setNegativeButton("Cancel", null)
-                        .create()
-
-                    dialogView.findViewById<android.widget.TextView>(R.id.totalShareInfo).text = "Total Profit Share: ${totalShare.toInt()}%"
-                    val editMyOwn = dialogView.findViewById<android.widget.EditText>(R.id.editMyOwnPct)
-                    val editFriend = dialogView.findViewById<android.widget.EditText>(R.id.editFriendPct)
-
-                    editMyOwn.setText(myOwnPct.toInt().toString())
-                    editFriend.setText(friendPct.toInt().toString())
-
-                    dialogView.findViewById<android.widget.Button>(R.id.btnSaveConfig).setOnClickListener {
-                        val newMyOwnStr = editMyOwn.text.toString()
-                        val newFriendStr = editFriend.text.toString()
-
-                        if (newMyOwnStr.isEmpty() || newFriendStr.isEmpty()) {
-                            android.widget.Toast.makeText(context, "Both percentages required", android.widget.Toast.LENGTH_SHORT).show()
-                            return@setOnClickListener
-                        }
-
-                        val newMyOwn = newMyOwnStr.toInt()
-                        val newFriend = newFriendStr.toInt()
-
-                        if (newMyOwn + newFriend != 100) {
-                            android.widget.Toast.makeText(context, "My Own + Friend percentages must add up to 100%", android.widget.Toast.LENGTH_SHORT).show()
-                            return@setOnClickListener
-                        }
-
-                        saveReportConfig(newMyOwn, newFriend)
-                        dialog.dismiss()
-                    }
-
-                    dialog.show()
+                    Toast.makeText(context, "Transaction deleted successfully", Toast.LENGTH_SHORT).show()
+                    // Refresh the account details and transactions
+                    view?.let { loadAccountDetails(it) }
+                    view?.let { loadTransactions(it) }
                 } else {
-                    android.widget.Toast.makeText(context, "Failed to load current configuration", android.widget.Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Failed to delete transaction", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                android.widget.Toast.makeText(context, "Error loading configuration", android.widget.Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Error deleting transaction: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -329,31 +346,49 @@ class ExchangeAccountDetailFragment : Fragment() {
             try {
                 val response = apiService.getReportConfig(ApiClient.getAuthToken(token), accountId)
                 if (response.isSuccessful) {
-                    val config = response.body() ?: return@launch
-                    val friendPct = (config["friend_percentage"] as? Double ?: 0.0) / 100.0
-                    val myOwnPct = (config["my_own_percentage"] as? Double ?: 0.0) / 100.0
+                    val config = response.body()
+                    if (config != null && config.isNotEmpty()) {
+                        // Show report configuration section
+                        view.findViewById<androidx.cardview.widget.CardView>(R.id.reportConfigCard)?.visibility = View.VISIBLE
 
-                    // Calculate actual amounts from total share
-                    val myOwnAmount = (totalShare * myOwnPct).toLong()
-                    val friendAmount = (totalShare * friendPct).toLong()
+                        val friendPct = (config["friend_percentage"] as? Double ?: 0.0)
+                        val myOwnPct = (config["my_own_percentage"] as? Double ?: 0.0)
 
-                    // Update UI with detailed breakdown
-                    view.findViewById<TextView>(R.id.mySharePercentage)?.text = "₹${String.format("%,d", myOwnAmount)} (${String.format("%.1f", myOwnPct * 100)}%)"
-                    view.findViewById<TextView>(R.id.friendSharePercentage)?.text = "₹${String.format("%,d", friendAmount)} (${String.format("%.1f", friendPct * 100)}%)"
+                        // Update Report Configuration section
+                        view.findViewById<TextView>(R.id.companyPercentageValue)?.text = "${friendPct}%"
+                        view.findViewById<TextView>(R.id.myOwnPercentageValue)?.text = "${myOwnPct}%"
+
+                        // Calculate actual amounts from total share for detailed breakdown
+                        val myOwnAmount = (totalShare * (myOwnPct / 100.0)).toLong()
+                        val friendAmount = (totalShare * (friendPct / 100.0)).toLong()
+
+                        // Update Share Breakdown section with detailed breakdown
+                        view.findViewById<TextView>(R.id.mySharePercentage)?.text = "₹${String.format("%,d", myOwnAmount)} (${String.format("%.1f", myOwnPct)}%)"
+                        view.findViewById<TextView>(R.id.friendSharePercentage)?.text = "₹${String.format("%,d", friendAmount)} (${String.format("%.1f", friendPct)}%)"
+                    } else {
+                        // Hide report configuration section if no config exists
+                        view.findViewById<androidx.cardview.widget.CardView>(R.id.reportConfigCard)?.visibility = View.GONE
+
+                        // Fallback: show basic percentage info in share breakdown
+                        view.findViewById<TextView>(R.id.mySharePercentage)?.text = "₹${String.format("%,d", totalShare)} (100%)"
+                        view.findViewById<TextView>(R.id.friendSharePercentage)?.text = "₹0 (0%)"
+                    }
                 } else {
+                    // Hide report configuration section
+                    view.findViewById<androidx.cardview.widget.CardView>(R.id.reportConfigCard)?.visibility = View.GONE
+
                     // Fallback: show basic percentage info
-                    val myPercentage = 50 // Default fallback
-                    val friendPercentage = 50
-                    view.findViewById<TextView>(R.id.mySharePercentage)?.text = "$myPercentage%"
-                    view.findViewById<TextView>(R.id.friendSharePercentage)?.text = "$friendPercentage%"
+                    view.findViewById<TextView>(R.id.mySharePercentage)?.text = "₹${String.format("%,d", totalShare)} (100%)"
+                    view.findViewById<TextView>(R.id.friendSharePercentage)?.text = "₹0 (0%)"
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                // Hide report configuration section
+                view.findViewById<androidx.cardview.widget.CardView>(R.id.reportConfigCard)?.visibility = View.GONE
+
                 // Fallback: show basic percentage info
-                val myPercentage = 50 // Default fallback
-                val friendPercentage = 50
-                view.findViewById<TextView>(R.id.mySharePercentage)?.text = "$myPercentage%"
-                view.findViewById<TextView>(R.id.friendSharePercentage)?.text = "$friendPercentage%"
+                view.findViewById<TextView>(R.id.mySharePercentage)?.text = "₹${String.format("%,d", totalShare)} (100%)"
+                view.findViewById<TextView>(R.id.friendSharePercentage)?.text = "₹0 (0%)"
             }
         }
     }

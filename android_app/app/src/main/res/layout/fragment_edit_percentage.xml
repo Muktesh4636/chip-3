@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_page">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <!-- Header -->
+        <TextView
+            android:id="@+id/editTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Edit Exchange Configuration"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_main"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Configure exchange link settings and percentages"
+            android:textSize="14sp"
+            android:textColor="@color/text_muted"
+            android:layout_marginBottom="32dp" />
+
+        <!-- Form Container -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="@color/white"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="24dp">
+
+                <!-- My Total Percentage -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginBottom="20dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="My Total Percentage *"
+                        android:textSize="16sp"
+                        android:textColor="@color/text_main"
+                        android:layout_marginBottom="8dp" />
+
+                    <EditText
+                        android:id="@+id/myPercentageInput"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="numberDecimal"
+                        android:hint="0.00"
+                        android:textSize="16sp"
+                        android:background="@drawable/field_input_bg"
+                        android:padding="12dp"
+                        android:layout_marginBottom="8dp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Your total percentage share (0-100, decimals allowed). This will be used for both loss and profit calculations."
+                        android:textSize="12sp"
+                        android:textColor="@color/text_muted" />
+
+                </LinearLayout>
+
+                <!-- Report Configuration Section -->
+                <LinearLayout
+                    android:id="@+id/reportConfigSection"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@color/bg_page"
+                    android:padding="16dp"
+                    android:layout_marginTop="20dp"
+                    android:layout_marginBottom="20dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Report Configuration (Optional)"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_main"
+                        android:layout_marginBottom="12dp" />
+
+                    <!-- Validation Message -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="⚠️ Validation Rule: Company % + My Own % must equal My Total %"
+                        android:textSize="13sp"
+                        android:textColor="@color/warning"
+                        android:background="@drawable/field_input_bg"
+                        android:padding="12dp"
+                        android:layout_marginBottom="16dp" />
+
+                    <TextView
+                        android:id="@+id/percentageSummary"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Current: Company % (0.00) + My Own % (0.00) = 0.00 | My Total %: 0.00"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_main"
+                        android:background="@drawable/field_input_bg"
+                        android:padding="12dp"
+                        android:layout_marginBottom="16dp" />
+
+                    <!-- Company Percentage -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:layout_marginBottom="16dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Company Percentage"
+                            android:textSize="14sp"
+                            android:textColor="@color/text_main"
+                            android:layout_marginBottom="8dp" />
+
+                        <EditText
+                            android:id="@+id/friendPercentageInput"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="numberDecimal"
+                            android:hint="0.00"
+                            android:textSize="16sp"
+                            android:background="@drawable/field_input_bg"
+                            android:padding="12dp"
+                            android:layout_marginBottom="4dp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Company percentage (report only, decimals allowed). Must sum with My Own % to equal My Total %."
+                            android:textSize="12sp"
+                            android:textColor="@color/text_muted" />
+
+                    </LinearLayout>
+
+                    <!-- My Own Percentage -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:layout_marginBottom="16dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="My Own Percentage"
+                            android:textSize="14sp"
+                            android:textColor="@color/text_main"
+                            android:layout_marginBottom="8dp" />
+
+                        <EditText
+                            android:id="@+id/myOwnPercentageInput"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="numberDecimal"
+                            android:hint="0.00"
+                            android:textSize="16sp"
+                            android:background="@drawable/field_input_bg"
+                            android:padding="12dp"
+                            android:layout_marginBottom="4dp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Your own percentage (report only, decimals allowed). Company % + My Own % = My Total %."
+                            android:textSize="12sp"
+                            android:textColor="@color/text_muted" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+                <!-- Action Buttons -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="20dp"
+                    android:gravity="end">
+
+                    <Button
+                        android:id="@+id/btnCancel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Cancel"
+                        android:textColor="@color/text_main"
+                        android:backgroundTint="@android:color/transparent"
+                        android:layout_marginEnd="12dp"
+                        android:paddingHorizontal="16dp"
+                        android:paddingVertical="10dp"
+                        app:cornerRadius="8dp"
+                        style="?android:attr/borderlessButtonStyle" />
+
+                    <Button
+                        android:id="@+id/btnSave"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Save Changes"
+                        android:textSize="16sp"
+                        android:backgroundTint="@color/primary"
+                        android:textColor="@color/white"
+                        android:paddingHorizontal="16dp"
+                        android:paddingVertical="10dp"
+                        app:cornerRadius="8dp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </androidx.cardview.widget.CardView>
+
+    </LinearLayout>
+
+</ScrollView>

@@ -6,6 +6,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
+from decimal import Decimal
 
 
 class CustomUser(AbstractUser):
@@ -266,7 +267,7 @@ class ClientExchangeAccount(TimeStampedModel):
             client_pnl: Optional PnL value. If None, computes from current balances.
         
         Returns:
-            int: Share percentage (0-100)
+            Decimal: Share percentage (0-100)
         """
         if client_pnl is None:
             client_pnl = self.compute_client_pnl()
@@ -279,8 +280,12 @@ class ClientExchangeAccount(TimeStampedModel):
             share_pct = self.profit_share_percentage if self.profit_share_percentage and self.profit_share_percentage > 0 else self.my_percentage
         else:
             # ZERO PnL: No share
-            share_pct = 0
+            share_pct = Decimal('0')
         
+        # Ensure Decimal type for consistency
+        if not isinstance(share_pct, Decimal):
+            share_pct = Decimal(str(share_pct))
+            
         return share_pct
     
     def compute_masked_capital(self, share_payment):
@@ -316,21 +321,29 @@ class ClientExchangeAccount(TimeStampedModel):
         Returns: BIGINT (always positive, floor rounded)
         """
         import math
-        client_pnl = self.compute_client_pnl()
-        
-        if client_pnl == 0:
+        try:
+            client_pnl = self.compute_client_pnl()
+            
+            if client_pnl == 0:
+                return 0
+            
+            # Use helper method to get appropriate share percentage
+            share_pct = self.get_share_percentage(client_pnl)
+
+            # Ensure share_pct is a Decimal for precise calculation
+            if not isinstance(share_pct, Decimal):
+                share_pct = Decimal(str(share_pct))
+
+            # Exact Share (NO rounding)
+            exact_share = Decimal(str(abs(client_pnl))) * (share_pct / Decimal('100'))
+
+            # Final Share (ONLY rounding step) - FLOOR (round down)
+            final_share = math.floor(float(exact_share))
+            
+            return int(final_share)
+        except Exception as e:
+            print(f"Error in compute_my_share for account {self.id}: {e}")
             return 0
-        
-        # Use helper method to get appropriate share percentage
-        share_pct = self.get_share_percentage(client_pnl)
-
-        # Exact Share (NO rounding)
-        exact_share = abs(client_pnl) * (share_pct / Decimal(100))
-
-        # Final Share (ONLY rounding step) - FLOOR (round down)
-        final_share = math.floor(exact_share)
-        
-        return int(final_share)
     
     def compute_exact_share(self):
         """
@@ -338,18 +351,26 @@ class ClientExchangeAccount(TimeStampedModel):
         
         Returns: float (exact share before floor rounding)
         """
-        client_pnl = self.compute_client_pnl()
-        
-        if client_pnl == 0:
+        try:
+            client_pnl = self.compute_client_pnl()
+            
+            if client_pnl == 0:
+                return 0.0
+            
+            # Use helper method to get appropriate share percentage
+            share_pct = self.get_share_percentage(client_pnl)
+
+            # Ensure share_pct is a Decimal for precise calculation
+            if not isinstance(share_pct, Decimal):
+                share_pct = Decimal(str(share_pct))
+
+            # Exact Share (NO rounding)
+            exact_share = Decimal(str(abs(client_pnl))) * (share_pct / Decimal('100'))
+
+            return float(exact_share)
+        except Exception as e:
+            print(f"Error in compute_exact_share for account {self.id}: {e}")
             return 0.0
-        
-        # Use helper method to get appropriate share percentage
-        share_pct = self.get_share_percentage(client_pnl)
-
-        # Exact Share (NO rounding)
-        exact_share = abs(client_pnl) * (share_pct / Decimal(100))
-
-        return exact_share
     
     def lock_initial_share_if_needed(self):
         """

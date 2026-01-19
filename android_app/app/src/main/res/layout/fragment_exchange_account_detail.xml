@@ -30,47 +30,66 @@
             android:textColor="@color/text_muted"
             android:layout_marginBottom="24dp" />
 
-        <!-- Action Buttons -->
+        <!-- Action Buttons (matching website layout) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="24dp">
+            android:layout_marginBottom="24dp"
+            android:gravity="start">
 
             <Button
                 android:id="@+id/btnAddFunding"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:text="Add Funding"
                 android:textSize="14sp"
                 android:backgroundTint="@color/primary"
                 android:textColor="@color/white"
-                android:layout_marginEnd="8dp"
+                android:layout_marginEnd="12dp"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="10dp"
                 app:cornerRadius="8dp" />
 
             <Button
                 android:id="@+id/btnUpdateBalance"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:text="Update Balance"
                 android:textSize="14sp"
-                android:backgroundTint="@color/success"
+                android:backgroundTint="@color/primary"
                 android:textColor="@color/white"
-                android:layout_marginEnd="8dp"
+                android:layout_marginEnd="12dp"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="10dp"
                 app:cornerRadius="8dp" />
 
             <Button
                 android:id="@+id/btnEditPercentage"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:text="Edit Percentage"
                 android:textSize="14sp"
-                android:backgroundTint="@color/warning"
+                android:backgroundTint="@color/primary"
                 android:textColor="@color/white"
+                android:layout_marginEnd="12dp"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="10dp"
                 app:cornerRadius="8dp" />
+
+            <Button
+                android:id="@+id/btnBackToClient"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Back to Client"
+                android:textSize="14sp"
+                android:textColor="@color/text_main"
+                android:backgroundTint="@android:color/transparent"
+                android:layout_marginEnd="12dp"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="10dp"
+                app:cornerRadius="8dp"
+                style="?android:attr/borderlessButtonStyle" />
 
         </LinearLayout>
 
@@ -98,12 +117,12 @@
                     android:textColor="@color/text_main"
                     android:layout_marginBottom="16dp" />
 
-                <!-- Summary Grid -->
+                <!-- Summary Grid (matching website's 6 cards) -->
                 <GridLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:columnCount="2"
-                    android:rowCount="2"
+                    android:rowCount="3"
                     android:layout_marginBottom="20dp">
 
                     <!-- Funding -->
@@ -111,7 +130,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
-                        android:text="Initial Funding"
+                        android:text="Funding"
                         android:textSize="12sp"
                         android:textColor="@color/text_muted"
                         android:layout_marginBottom="4dp" />
@@ -127,12 +146,12 @@
                         android:textColor="@color/primary"
                         android:layout_marginBottom="12dp" />
 
-                    <!-- Current Balance -->
+                    <!-- Exchange Balance -->
                     <TextView
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
-                        android:text="Current Balance"
+                        android:text="Exchange Balance"
                         android:textSize="12sp"
                         android:textColor="@color/text_muted"
                         android:layout_marginBottom="4dp" />
@@ -153,7 +172,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
-                        android:text="Client P&amp;L"
+                        android:text="Client PnL"
                         android:textSize="12sp"
                         android:textColor="@color/text_muted"
                         android:layout_marginBottom="4dp" />
@@ -169,18 +188,18 @@
                         android:textColor="@color/accent"
                         android:layout_marginBottom="12dp" />
 
-                    <!-- My Share -->
+                    <!-- Final Share -->
                     <TextView
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
-                        android:text="My Share"
+                        android:text="Final Share"
                         android:textSize="12sp"
                         android:textColor="@color/text_muted"
                         android:layout_marginBottom="4dp" />
 
                     <TextView
-                        android:id="@+id/myShareValue"
+                        android:id="@+id/finalShareValue"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_columnWeight="1"
@@ -190,9 +209,370 @@
                         android:textColor="@color/warning"
                         android:layout_marginBottom="12dp" />
 
+                    <!-- Remaining Settlement -->
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="Remaining Settlement"
+                        android:textSize="12sp"
+                        android:textColor="@color/text_muted"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:id="@+id/remainingSettlementValue"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="₹0"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/accent"
+                        android:layout_marginBottom="12dp" />
+
+                    <!-- Share Percentage -->
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="Share Percentage"
+                        android:textSize="12sp"
+                        android:textColor="@color/text_muted"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:id="@+id/sharePercentageValue"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="0%"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/info"
+                        android:layout_marginBottom="12dp" />
+
                 </GridLayout>
 
-                <!-- Share Breakdown -->
+            </LinearLayout>
+
+        </androidx.cardview.widget.CardView>
+
+        <!-- Account Information Section (matching website) -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="@color/bg_card"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="16dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Account Information"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_main" />
+
+                    <Button
+                        android:id="@+id/btnEditPercentageSmall"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Edit Percentage"
+                        android:textSize="13sp"
+                        android:textColor="@color/primary"
+                        android:backgroundTint="@android:color/transparent"
+                        android:padding="8dp"
+                        app:cornerRadius="6dp"
+                        style="?android:attr/borderlessButtonStyle" />
+
+                </LinearLayout>
+
+                <GridLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:columnCount="2"
+                    android:rowCount="4">
+
+                    <!-- Client -->
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="Client"
+                        android:textSize="13sp"
+                        android:textColor="@color/text_muted"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:id="@+id/clientInfoValue"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="Loading..."
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_main"
+                        android:layout_marginBottom="12dp" />
+
+                    <!-- Exchange -->
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="Exchange"
+                        android:textSize="13sp"
+                        android:textColor="@color/text_muted"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:id="@+id/exchangeInfoValue"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="Loading..."
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_main"
+                        android:layout_marginBottom="12dp" />
+
+                    <!-- My Total % -->
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="My Total %"
+                        android:textSize="13sp"
+                        android:textColor="@color/text_muted"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:id="@+id/myTotalPercentageValue"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="0%"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_main"
+                        android:layout_marginBottom="12dp" />
+
+                    <!-- Loss Share % -->
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="Loss Share %"
+                        android:textSize="13sp"
+                        android:textColor="@color/text_muted"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:id="@+id/lossSharePercentageValue"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="0%"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_main"
+                        android:layout_marginBottom="12dp" />
+
+                    <!-- Profit Share % -->
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="Profit Share %"
+                        android:textSize="13sp"
+                        android:textColor="@color/text_muted"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:id="@+id/profitSharePercentageValue"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="0%"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_main"
+                        android:layout_marginBottom="12dp" />
+
+                    <!-- Created -->
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="Created"
+                        android:textSize="13sp"
+                        android:textColor="@color/text_muted"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:id="@+id/createdValue"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="Loading..."
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_main"
+                        android:layout_marginBottom="12dp" />
+
+                    <!-- Last Updated -->
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="Last Updated"
+                        android:textSize="13sp"
+                        android:textColor="@color/text_muted"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:id="@+id/lastUpdatedValue"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="Loading..."
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_main"
+                        android:layout_marginBottom="12dp" />
+
+                </GridLayout>
+
+            </LinearLayout>
+
+        </androidx.cardview.widget.CardView>
+
+        <!-- Report Configuration Section (matching website) -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/reportConfigCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="@color/bg_card"
+            android:layout_marginBottom="16dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Report Configuration"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_main"
+                    android:layout_marginBottom="16dp" />
+
+                <GridLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:columnCount="2"
+                    android:rowCount="2">
+
+                    <!-- Company % -->
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="Company %"
+                        android:textSize="13sp"
+                        android:textColor="@color/text_muted"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:id="@+id/companyPercentageValue"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="0%"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_main"
+                        android:layout_marginBottom="12dp" />
+
+                    <!-- My Own % -->
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="My Own %"
+                        android:textSize="13sp"
+                        android:textColor="@color/text_muted"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:id="@+id/myOwnPercentageValue"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_columnWeight="1"
+                        android:text="0%"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_main"
+                        android:layout_marginBottom="12dp" />
+
+                </GridLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Note: These percentages are used ONLY for reports, not system logic."
+                    android:textSize="13sp"
+                    android:textColor="@color/text_muted"
+                    android:layout_marginTop="12dp"
+                    android:layout_marginBottom="12dp" />
+
+            </LinearLayout>
+
+        </androidx.cardview.widget.CardView>
+
+        <!-- Share Breakdown -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="@color/bg_card"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Share Breakdown"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_main"
+                    android:layout_marginBottom="16dp" />
+
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -324,7 +704,7 @@
 
         <!-- Back Button -->
         <Button
-            android:id="@+id/btnBackToClient"
+            android:id="@+id/btnBackToClientBottom"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Back to Client"
