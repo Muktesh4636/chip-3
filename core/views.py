@@ -3345,11 +3345,15 @@ def transaction_edit(request, pk):
 def transaction_delete_logic(transaction):
     """Core logic to delete a transaction and revert balances, shared between web and API."""
     from django.db import transaction as db_transaction
-    from .models import Settlement
+    from .models import Settlement, Transaction
     account = transaction.client_exchange
     
     with db_transaction.atomic():
-        # 1. Revert account balances to exactly what they were BEFORE this transaction
+        # 1. Capture transaction details before deletion
+        transaction_type = transaction.type
+        transaction_amount = transaction.amount
+        
+        # 2. Initial revert using "before" values (primary method)
         if transaction.funding_before is not None:
             account.funding = transaction.funding_before
         
@@ -3357,32 +3361,45 @@ def transaction_delete_logic(transaction):
             account.exchange_balance = transaction.exchange_balance_before
         
         # Adjust balances for auto-refunding entries that may not track before/after values
-        if transaction.type == 'FUNDING_AUTO':
+        if transaction.type == 'FUNDING_AUTO' and transaction.funding_before is None:
             auto_amount = transaction.amount or 0
             account.funding = max(0, account.funding - auto_amount)
             account.exchange_balance = max(0, account.exchange_balance - auto_amount)
         
-        # 2. Reset the PnL cycle. This is CRITICAL.
+        # 3. Special case: If we're deleting a payment settlement, delete corresponding Settlement record
+        if transaction_type in ['RECORD_PAYMENT', 'SETTLEMENT_SHARE']:
+            last_settlement = Settlement.objects.filter(client_exchange=account).order_by('-date', '-id').first()
+            if last_settlement:
+                if last_settlement.amount == abs(transaction_amount):
+                    last_settlement.delete()
+        
+        # 4. Delete the transaction record
+        transaction.delete()
+        
+        # 5. RECOMPUTE SAFETY NET: Sync account balance with the NEW latest transaction
+        # This ensures the Account Summary always matches the last valid state in history.
+        latest_tx = Transaction.objects.filter(client_exchange=account).order_by('-created_at', '-id').first()
+        if latest_tx:
+            if latest_tx.funding_after is not None:
+                account.funding = latest_tx.funding_after
+            if latest_tx.exchange_balance_after is not None:
+                account.exchange_balance = latest_tx.exchange_balance_after
+        else:
+            # No transactions left - reset everything to zero
+            account.funding = 0
+            account.exchange_balance = 0
+        
+        # 6. Reset the PnL cycle. This is CRITICAL.
         account.locked_initial_final_share = None
         account.locked_share_percentage = None
         account.locked_initial_pnl = None
         account.cycle_start_date = None
         account.locked_initial_funding = None
         
-        # 3. Special case: If we're deleting a payment settlement, delete corresponding Settlement record
-        if transaction.type in ['RECORD_PAYMENT', 'SETTLEMENT_SHARE']:
-            last_settlement = Settlement.objects.filter(client_exchange=account).order_by('-date', '-id').first()
-            if last_settlement:
-                if last_settlement.amount == abs(transaction.amount):
-                    last_settlement.delete()
-        
-        # 4. Save account changes
+        # 7. Save account changes
         account.save()
         
-        # 5. Delete the transaction record
-        transaction.delete()
-        
-        # 6. Force a fresh re-lock of the share based on the NEW reverted balances
+        # 8. Force a fresh re-lock of the share based on the NEW reverted balances
         account.lock_initial_share_if_needed()
 
 @login_required
@@ -4912,7 +4929,10 @@ def record_payment(request, account_id):
                             date=payment_date,
                             type='FUNDING_AUTO',
                             amount=int(masked_capital),
-                        exchange_balance_after=account.exchange_balance,
+                            funding_before=funding_before_refund,
+                            funding_after=account.funding,
+                            exchange_balance_before=exchange_before_refund,
+                            exchange_balance_after=account.exchange_balance,
                             notes=f"Auto Re-Funding after settlement (linked to Settlement ID: {settlement.id}). "
                                   f"Amount: {int(masked_capital)} (Masked Capital)"
                         )
