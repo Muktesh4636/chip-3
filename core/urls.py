@@ -17,6 +17,7 @@ urlpatterns = [
     path('api/login/', api_views.api_login, name='api-login'),
     path('api/mobile-dashboard/', api_views.mobile_dashboard_summary, name='api-mobile-dashboard'),
     path('api/pending-payments/', api_views.api_pending_payments, name='api-pending-payments'),
+    path('api/pending/export/', api_views.api_export_pending_csv, name='api-pending-export'),
     path('api/accounts/<int:account_id>/funding/', api_views.api_add_funding, name='api-funding'),
     path('api/accounts/<int:account_id>/balance/', api_views.api_update_balance, name='api-balance'),
     path('api/accounts/<int:account_id>/payment/', api_views.api_record_payment, name='api-payment'),

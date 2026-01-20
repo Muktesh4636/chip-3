@@ -123,7 +123,7 @@ interface ApiService {
         @Body data: Map<String, String>
     ): Response<Map<String, Any>>
 
-    @GET("pending/export/")
+    @GET("api/pending/export/")
     suspend fun exportPendingPayments(
         @Header("Authorization") token: String
     ): Response<okhttp3.ResponseBody>

@@ -5,8 +5,10 @@ from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.db.models import Sum, Q
 from django.utils import timezone
+from django.http import HttpResponse
 from decimal import Decimal
 from datetime import date, timedelta
+import csv
 from .models import Client, Exchange, ClientExchangeAccount, Transaction, ClientExchangeReportConfig
 from .serializers import (
     ClientSerializer, ExchangeSerializer,
@@ -200,6 +202,115 @@ def api_pending_payments(request):
         'total_to_pay': total_to_pay,
         'currency': 'INR'
     })
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def api_export_pending_csv(request):
+    """
+    Export pending payments report as CSV for mobile app.
+    Mirrors the website's export_pending_csv exactly.
+    """
+    # Get all client exchanges for the user
+    client_exchanges = ClientExchangeAccount.objects.filter(
+        client__user=request.user
+    ).select_related("client", "exchange")
+    
+    clients_owe_list = []
+    you_owe_list = []
+    
+    for client_exchange in client_exchanges:
+        client_pnl = client_exchange.compute_client_pnl()
+        
+        # Determine cases
+        is_neutral_case = client_pnl == 0
+        is_loss_case = client_pnl < 0
+        is_profit_case = client_pnl > 0
+        
+        # Lock share if needed
+        client_exchange.lock_initial_share_if_needed()
+        settlement_info = client_exchange.get_remaining_settlement_amount()
+        initial_final_share = settlement_info['initial_final_share']
+        remaining_amount = settlement_info['remaining']
+        
+        # Use initial locked share for display
+        final_share = initial_final_share if initial_final_share > 0 else client_exchange.compute_my_share()
+        share_pct = client_exchange.get_share_percentage(client_pnl)
+        
+        if is_neutral_case:
+            clients_owe_list.append({
+                "client": client_exchange.client,
+                "exchange": client_exchange.exchange,
+                "account": client_exchange,
+                "client_pnl": client_pnl,
+                "remaining_amount": 0,
+                "share_percentage": share_pct,
+                "show_na": True,
+            })
+            continue
+            
+        # Calculate display remaining using website logic
+        display_remaining = calculate_display_remaining(client_pnl, remaining_amount)
+        remaining_display = abs(display_remaining) if display_remaining else 0
+        
+        item_data = {
+            "client": client_exchange.client,
+            "exchange": client_exchange.exchange,
+            "account": client_exchange,
+            "client_pnl": client_pnl,
+            "remaining_amount": remaining_display,
+            "final_share": final_share,
+            "share_percentage": share_pct,
+            "show_na": (final_share == 0),
+        }
+        
+        if is_loss_case:
+            clients_owe_list.append(item_data)
+        elif is_profit_case:
+            you_owe_list.append(item_data)
+
+    # Sort lists by amount (descending) - Matching website logic
+    def get_csv_sort_key(item):
+        if item.get("show_na", False): return 0
+        return abs(item.get("final_share", 0))
+
+    clients_owe_list.sort(key=get_csv_sort_key, reverse=True)
+    you_owe_list.sort(key=get_csv_sort_key, reverse=True)
+    
+    # Create CSV response
+    response = HttpResponse(content_type='text/csv')
+    filename = f"pending_payments_{date.today().strftime('%Y%m%d')}.csv"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    writer = csv.writer(response)
+    
+    # Write header row - Same as website
+    headers = [
+        'Client',
+        'U_CODE',
+        'Master',
+        'OPENING POINTS',
+        'AVL.POINTS(CLOSING POINTS)',
+        'PROFIT(+)/LOSS(-)',
+        'MY SHARE',
+        'MY%'
+    ]
+    writer.writerow(headers)
+    
+    # Write rows
+    for item in clients_owe_list + you_owe_list:
+        row_data = [
+            item["client"].name or '',
+            item["client"].code or '',
+            item["exchange"].name or '',
+            int(item["account"].funding),
+            int(item["account"].exchange_balance),
+            'N.A' if item.get("show_na", False) else int(item["client_pnl"]),
+            'N.A' if item.get("show_na", False) else int(item["remaining_amount"]),
+            item.get("share_percentage", item["account"].my_percentage)
+        ]
+        writer.writerow(row_data)
+        
+    return response
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
