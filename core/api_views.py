@@ -885,8 +885,12 @@ def api_delete_transaction(request, pk):
         transaction = Transaction.objects.get(id=pk, client_exchange__client__user=request.user)
         transaction_delete_logic(transaction)
         return Response({'status': 'success'})
+    except Transaction.DoesNotExist:
+        return Response({'error': 'Transaction not found or access denied'}, status=404)
     except Exception as e:
         print(f"DEBUG API DELETE TXN ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return Response({'error': str(e)}, status=400)
 
 @api_view(['POST'])

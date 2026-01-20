@@ -3347,6 +3347,7 @@ def transaction_edit(request, pk):
 def transaction_delete_logic(transaction):
     """Core logic to delete a transaction and revert balances, shared between web and API."""
     from django.db import transaction as db_transaction
+    from .models import Settlement
     account = transaction.client_exchange
     
     with db_transaction.atomic():
@@ -3371,8 +3372,6 @@ def transaction_delete_logic(transaction):
         account.locked_initial_funding = None
         
         # 3. Special case: If we're deleting a payment settlement, delete corresponding Settlement record
-        # Note: Settlement model must be imported or available
-        from .models import Settlement
         if transaction.type in ['RECORD_PAYMENT', 'SETTLEMENT_SHARE']:
             last_settlement = Settlement.objects.filter(client_exchange=account).order_by('-date', '-id').first()
             if last_settlement:
@@ -3391,6 +3390,8 @@ def transaction_delete_logic(transaction):
 def transaction_delete(request, pk):
     """Delete only the latest transaction and revert account balances."""
     from django.contrib import messages
+    from django.shortcuts import get_object_or_404, redirect
+    from django.urls import reverse
     
     transaction = get_object_or_404(Transaction, pk=pk, client_exchange__client__user=request.user)
     account = transaction.client_exchange
