@@ -9,7 +9,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="24dp">
+        android:padding="16dp">
 
         <!-- Title -->
         <TextView
@@ -17,79 +17,52 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Client Name - Exchange Name"
-            android:textSize="24sp"
+            android:textSize="20sp"
             android:textStyle="bold"
             android:textColor="@color/text_main"
-            android:layout_marginBottom="8dp" />
+            android:layout_marginBottom="4dp" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Account details and transactions"
-            android:textSize="14sp"
-            android:textColor="@color/text_muted"
-            android:layout_marginBottom="24dp" />
-
-        <!-- Action Buttons (matching website layout) -->
+        <!-- Action Buttons -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="24dp"
-            android:gravity="start">
+            android:layout_marginBottom="0dp">
 
             <Button
                 android:id="@+id/btnAddFunding"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="Add Funding"
-                android:textSize="14sp"
+                android:layout_weight="1"
+                android:text="FUNDING"
+                android:textSize="12sp"
                 android:backgroundTint="@color/primary"
                 android:textColor="@color/white"
-                android:layout_marginEnd="12dp"
-                android:paddingHorizontal="16dp"
-                android:paddingVertical="10dp"
-                app:cornerRadius="8dp" />
+                android:layout_marginEnd="4dp"
+                app:cornerRadius="6dp" />
 
             <Button
                 android:id="@+id/btnUpdateBalance"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="Update Balance"
-                android:textSize="14sp"
+                android:layout_weight="1"
+                android:text="BALANCE"
+                android:textSize="12sp"
                 android:backgroundTint="@color/primary"
                 android:textColor="@color/white"
-                android:layout_marginEnd="12dp"
-                android:paddingHorizontal="16dp"
-                android:paddingVertical="10dp"
-                app:cornerRadius="8dp" />
+                android:layout_marginEnd="4dp"
+                app:cornerRadius="6dp" />
 
             <Button
                 android:id="@+id/btnEditPercentage"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="Edit Percentage"
-                android:textSize="14sp"
+                android:layout_weight="1"
+                android:text="EDIT %"
+                android:textSize="12sp"
                 android:backgroundTint="@color/primary"
                 android:textColor="@color/white"
-                android:layout_marginEnd="12dp"
-                android:paddingHorizontal="16dp"
-                android:paddingVertical="10dp"
-                app:cornerRadius="8dp" />
-
-            <Button
-                android:id="@+id/btnBackToClient"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Back to Client"
-                android:textSize="14sp"
-                android:textColor="@color/text_main"
-                android:backgroundTint="@android:color/transparent"
-                android:layout_marginEnd="12dp"
-                android:paddingHorizontal="16dp"
-                android:paddingVertical="10dp"
-                app:cornerRadius="8dp"
-                style="?android:attr/borderlessButtonStyle" />
+                app:cornerRadius="6dp" />
 
         </LinearLayout>
 
@@ -100,13 +73,14 @@
             app:cardCornerRadius="12dp"
             app:cardElevation="2dp"
             app:cardBackgroundColor="@color/bg_card"
+            android:layout_marginTop="4dp"
             android:layout_marginBottom="16dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="20dp">
+                android:padding="16dp">
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -257,8 +231,9 @@
 
         </androidx.cardview.widget.CardView>
 
-        <!-- Account Information Section (matching website) -->
+        <!-- Share Breakdown Card -->
         <androidx.cardview.widget.CardView
+            android:id="@+id/shareBreakdownCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:cardCornerRadius="12dp"
@@ -270,336 +245,41 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="20dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginBottom="16dp">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="Account Information"
-                        android:textSize="18sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/text_main" />
-
-                    <Button
-                        android:id="@+id/btnEditPercentageSmall"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Edit Percentage"
-                        android:textSize="13sp"
-                        android:textColor="@color/primary"
-                        android:backgroundTint="@android:color/transparent"
-                        android:padding="8dp"
-                        app:cornerRadius="6dp"
-                        style="?android:attr/borderlessButtonStyle" />
-
-                </LinearLayout>
-
-                <GridLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:columnCount="2"
-                    android:rowCount="4">
-
-                    <!-- Client -->
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:text="Client"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_muted"
-                        android:layout_marginBottom="4dp" />
-
-                    <TextView
-                        android:id="@+id/clientInfoValue"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:text="Loading..."
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/text_main"
-                        android:layout_marginBottom="12dp" />
-
-                    <!-- Exchange -->
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:text="Exchange"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_muted"
-                        android:layout_marginBottom="4dp" />
-
-                    <TextView
-                        android:id="@+id/exchangeInfoValue"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:text="Loading..."
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/text_main"
-                        android:layout_marginBottom="12dp" />
-
-                    <!-- My Total % -->
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:text="My Total %"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_muted"
-                        android:layout_marginBottom="4dp" />
-
-                    <TextView
-                        android:id="@+id/myTotalPercentageValue"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:text="0%"
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/text_main"
-                        android:layout_marginBottom="12dp" />
-
-                    <!-- Loss Share % -->
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:text="Loss Share %"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_muted"
-                        android:layout_marginBottom="4dp" />
-
-                    <TextView
-                        android:id="@+id/lossSharePercentageValue"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:text="0%"
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/text_main"
-                        android:layout_marginBottom="12dp" />
-
-                    <!-- Profit Share % -->
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:text="Profit Share %"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_muted"
-                        android:layout_marginBottom="4dp" />
-
-                    <TextView
-                        android:id="@+id/profitSharePercentageValue"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:text="0%"
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/text_main"
-                        android:layout_marginBottom="12dp" />
-
-                    <!-- Created -->
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:text="Created"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_muted"
-                        android:layout_marginBottom="4dp" />
-
-                    <TextView
-                        android:id="@+id/createdValue"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:text="Loading..."
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/text_main"
-                        android:layout_marginBottom="12dp" />
-
-                    <!-- Last Updated -->
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:text="Last Updated"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_muted"
-                        android:layout_marginBottom="4dp" />
-
-                    <TextView
-                        android:id="@+id/lastUpdatedValue"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:text="Loading..."
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/text_main"
-                        android:layout_marginBottom="12dp" />
-
-                </GridLayout>
-
-            </LinearLayout>
-
-        </androidx.cardview.widget.CardView>
-
-        <!-- Report Configuration Section (matching website) -->
-        <androidx.cardview.widget.CardView
-            android:id="@+id/reportConfigCard"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="2dp"
-            app:cardBackgroundColor="@color/bg_card"
-            android:layout_marginBottom="16dp"
-            android:visibility="gone">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="20dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Report Configuration"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/text_main"
-                    android:layout_marginBottom="16dp" />
-
-                <GridLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:columnCount="2"
-                    android:rowCount="2">
-
-                    <!-- Company % -->
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:text="Company %"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_muted"
-                        android:layout_marginBottom="4dp" />
-
-                    <TextView
-                        android:id="@+id/companyPercentageValue"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:text="0%"
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/text_main"
-                        android:layout_marginBottom="12dp" />
-
-                    <!-- My Own % -->
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:text="My Own %"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_muted"
-                        android:layout_marginBottom="4dp" />
-
-                    <TextView
-                        android:id="@+id/myOwnPercentageValue"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_columnWeight="1"
-                        android:text="0%"
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/text_main"
-                        android:layout_marginBottom="12dp" />
-
-                </GridLayout>
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Note: These percentages are used ONLY for reports, not system logic."
-                    android:textSize="13sp"
-                    android:textColor="@color/text_muted"
-                    android:layout_marginTop="12dp"
-                    android:layout_marginBottom="12dp" />
-
-            </LinearLayout>
-
-        </androidx.cardview.widget.CardView>
-
-        <!-- Share Breakdown -->
-        <androidx.cardview.widget.CardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="2dp"
-            app:cardBackgroundColor="@color/bg_card"
-            android:layout_marginBottom="16dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="20dp">
+                android:padding="16dp">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Share Breakdown"
-                    android:textSize="16sp"
+                    android:textSize="14sp"
                     android:textStyle="bold"
                     android:textColor="@color/text_main"
-                    android:layout_marginBottom="16dp" />
+                    android:layout_marginBottom="12dp" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:background="@color/bg_page"
-                    android:padding="16dp">
+                    android:orientation="horizontal">
 
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:orientation="vertical"
-                        android:layout_marginEnd="8dp">
+                        android:orientation="vertical">
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="My Personal Share"
-                            android:textSize="12sp"
+                            android:text="My Own Share"
+                            android:textSize="11sp"
                             android:textColor="@color/text_muted" />
 
                         <TextView
-                            android:id="@+id/mySharePercentage"
+                            android:id="@+id/myOwnShareValue"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="0%"
-                            android:textSize="14sp"
+                            android:text="₹0 (0%)"
+                            android:textSize="13sp"
                             android:textStyle="bold"
                             android:textColor="@color/primary" />
 
@@ -609,22 +289,21 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:orientation="vertical"
-                        android:layout_marginStart="8dp">
+                        android:orientation="vertical">
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Company Share"
-                            android:textSize="12sp"
+                            android:text="Friend Share"
+                            android:textSize="11sp"
                             android:textColor="@color/text_muted" />
 
                         <TextView
-                            android:id="@+id/friendSharePercentage"
+                            android:id="@+id/friendShareValue"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="0%"
-                            android:textSize="14sp"
+                            android:text="₹0 (0%)"
+                            android:textSize="13sp"
                             android:textStyle="bold"
                             android:textColor="@color/success" />
 
@@ -642,7 +321,8 @@
             android:layout_height="wrap_content"
             app:cardCornerRadius="12dp"
             app:cardElevation="2dp"
-            app:cardBackgroundColor="@color/bg_card">
+            app:cardBackgroundColor="@color/bg_card"
+            android:layout_marginTop="8dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -653,7 +333,7 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:padding="20dp"
+                    android:padding="16dp"
                     android:background="@color/primary"
                     android:orientation="horizontal">
 
@@ -662,19 +342,21 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="Recent Transactions"
-                        android:textSize="16sp"
+                        android:textSize="15sp"
                         android:textColor="@color/white"
                         android:textStyle="bold" />
 
                     <Button
                         android:id="@+id/btnViewAllTransactions"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="32dp"
                         android:text="View All"
-                        android:textSize="12sp"
+                        android:textSize="11sp"
                         android:backgroundTint="@color/white"
                         android:textColor="@color/primary"
-                        app:cornerRadius="6dp" />
+                        android:paddingHorizontal="12dp"
+                        android:paddingVertical="0dp"
+                        app:cornerRadius="4dp" />
 
                 </LinearLayout>
 
@@ -683,7 +365,7 @@
                     android:id="@+id/transactionsRecyclerView"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_margin="20dp"
+                    android:layout_margin="12dp"
                     android:nestedScrollingEnabled="false"
                     android:visibility="visible" />
 
@@ -692,28 +374,16 @@
                     android:id="@+id/emptyTransactionsText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:padding="40dp"
-                    android:text="No Transactions\nStart by adding funding or updating the exchange balance."
+                    android:padding="24dp"
+                    android:text="No Transactions"
                     android:textAlignment="center"
                     android:textColor="@color/text_muted"
-                    android:textSize="14sp"
+                    android:textSize="13sp"
                     android:visibility="gone" />
 
             </LinearLayout>
 
         </androidx.cardview.widget.CardView>
-
-        <!-- Back Button -->
-        <Button
-            android:id="@+id/btnBackToClientBottom"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Back to Client"
-            android:textSize="16sp"
-            android:backgroundTint="@color/text_muted"
-            android:textColor="@color/white"
-            android:layout_marginTop="24dp"
-            app:cornerRadius="8dp" />
 
     </LinearLayout>
 

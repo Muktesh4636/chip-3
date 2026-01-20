@@ -14,6 +14,8 @@ import com.transactionhub.data.api.ApiService
 import com.transactionhub.data.models.RecordPaymentRequest
 import com.transactionhub.data.models.Transaction
 import com.transactionhub.ui.transactions.TransactionsFragment
+import com.transactionhub.ui.transactions.TransactionsAdapter
+import org.json.JSONObject
 import com.transactionhub.utils.ApiClient
 import com.transactionhub.utils.PrefManager
 import kotlinx.coroutines.launch
@@ -130,14 +132,8 @@ class ExchangeAccountDetailFragment : Fragment() {
                             null
                         ))
 
-                        // Update Account Information section
-                        view.findViewById<TextView>(R.id.clientInfoValue)?.text = "${account.client_name} (${account.client})"
-                        view.findViewById<TextView>(R.id.exchangeInfoValue)?.text = "${account.exchange_name} (${account.exchange})"
-                        view.findViewById<TextView>(R.id.myTotalPercentageValue)?.text = "${account.loss_share_percentage}%"
-                        view.findViewById<TextView>(R.id.lossSharePercentageValue)?.text = "${account.loss_share_percentage}%"
-                        view.findViewById<TextView>(R.id.profitSharePercentageValue)?.text = "${account.profit_share_percentage}%"
-                        // TODO: Add created and updated dates when available in API
-
+                        // Update Account Information section - (Removed card but keeping logic for hidden fields if any)
+                        
                         val share = account.my_share
                         // Update Final Share value (was My Share)
                         val finalShareView = view.findViewById<TextView>(R.id.finalShareValue)
@@ -153,16 +149,12 @@ class ExchangeAccountDetailFragment : Fragment() {
                             sharePercentageView?.text = "${account.loss_share_percentage}%"
                         }
 
-                        // TODO: Calculate and display remaining settlement
+                        // Calculate and display remaining settlement
                         val remainingSettlementView = view.findViewById<TextView>(R.id.remainingSettlementValue)
-                        remainingSettlementView?.text = "₹${String.format("%,d", share)}" // Placeholder - needs actual calculation
+                        remainingSettlementView?.text = "₹${String.format("%,d", account.remaining_amount)}"
 
-                        // Load report config to get detailed share breakdown
+                        // Share breakdown section
                         loadReportConfig(view, accountId, share)
-
-                        // Account information with null safety
-                        // Account information - simplified for now
-                        // TODO: Add detailed account info section back
                     } else {
                         Toast.makeText(context, "Account not found", Toast.LENGTH_SHORT).show()
                     }
@@ -200,7 +192,9 @@ class ExchangeAccountDetailFragment : Fragment() {
                                 deleteTransaction(transaction)
                             }
                         } else {
-                            (recyclerView.adapter as? AccountTransactionAdapter)?.updateTransactions(accountTransactions)
+                            recyclerView?.adapter?.let { adapter ->
+                                adapter as? AccountTransactionAdapter
+                            }?.updateTransactions(accountTransactions)
                         }
                         view.findViewById<TextView>(R.id.emptyTransactionsText)?.visibility = View.GONE
                         android.util.Log.d("ExchangeAccountDetail", "Transactions displayed successfully")
@@ -232,16 +226,8 @@ class ExchangeAccountDetailFragment : Fragment() {
                 navigateToEditPercentage()
             }
 
-            view.findViewById<Button>(R.id.btnEditPercentageSmall)?.setOnClickListener {
-                navigateToEditPercentage()
-            }
-
             view.findViewById<Button>(R.id.btnViewAllTransactions)?.setOnClickListener {
                 navigateToTransactions()
-            }
-
-            view.findViewById<Button>(R.id.btnBackToClient)?.setOnClickListener {
-                parentFragmentManager.popBackStack()
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -347,17 +333,30 @@ class ExchangeAccountDetailFragment : Fragment() {
                 val response = apiService.deleteTransaction(ApiClient.getAuthToken(token), transaction.id)
                 if (response.isSuccessful) {
                     Toast.makeText(context, "Transaction deleted successfully", Toast.LENGTH_SHORT).show()
-                    // Refresh the account details and transactions
-                    view?.let { loadAccountDetails(it) }
-                    view?.let { loadTransactions(it) }
                 } else {
-                    Toast.makeText(context, "Failed to delete transaction", Toast.LENGTH_SHORT).show()
+                    val errorBody = response.errorBody()?.string()
+                    val apiError = errorBody?.let {
+                        try {
+                            org.json.JSONObject(it).optString("error", "Unknown error")
+                        } catch (e: Exception) {
+                            it
+                        }
+                    } ?: "Unknown error"
+                    android.util.Log.e("ExchangeAccountDetail", "Delete failed: ${response.code()}, $errorBody")
+                    Toast.makeText(context, "Failed to delete transaction: $apiError", Toast.LENGTH_SHORT).show()
                 }
+                (view?.findViewById<RecyclerView>(R.id.transactionsRecyclerView)?.adapter as? AccountTransactionAdapter)?.clearSelection()
+                view?.let { loadAccountDetails(it) }
+                view?.let { loadTransactions(it) }
             } catch (e: Exception) {
                 e.printStackTrace()
                 Toast.makeText(context, "Error deleting transaction: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    private fun formatNumber(number: Long): String {
+        return String.format("%,d", number)
     }
 
     private fun loadReportConfig(view: View, accountId: Int, totalShare: Long) {
@@ -369,47 +368,31 @@ class ExchangeAccountDetailFragment : Fragment() {
                 if (response.isSuccessful) {
                     val config = response.body()
                     if (config != null && config.isNotEmpty()) {
-                        // Show report configuration section
-                        view.findViewById<androidx.cardview.widget.CardView>(R.id.reportConfigCard)?.visibility = View.VISIBLE
-
                         val friendPct = (config["friend_percentage"] as? Double ?: 0.0)
                         val myOwnPct = (config["my_own_percentage"] as? Double ?: 0.0)
-
-                        // Update Report Configuration section
-                        view.findViewById<TextView>(R.id.companyPercentageValue)?.text = "${friendPct}%"
-                        view.findViewById<TextView>(R.id.myOwnPercentageValue)?.text = "${myOwnPct}%"
 
                         // Calculate actual amounts from total share for detailed breakdown
                         val myOwnAmount = (totalShare * (myOwnPct / 100.0)).toLong()
                         val friendAmount = (totalShare * (friendPct / 100.0)).toLong()
 
                         // Update Share Breakdown section with detailed breakdown
-                        view.findViewById<TextView>(R.id.mySharePercentage)?.text = "₹${String.format("%,d", myOwnAmount)} (${String.format("%.1f", myOwnPct)}%)"
-                        view.findViewById<TextView>(R.id.friendSharePercentage)?.text = "₹${String.format("%,d", friendAmount)} (${String.format("%.1f", friendPct)}%)"
+                        view.findViewById<TextView>(R.id.myOwnShareValue)?.text = "₹${formatNumber(myOwnAmount)} (${String.format("%.1f", myOwnPct)}%)"
+                        view.findViewById<TextView>(R.id.friendShareValue)?.text = "₹${formatNumber(friendAmount)} (${String.format("%.1f", friendPct)}%)"
                     } else {
-                        // Hide report configuration section if no config exists
-                        view.findViewById<androidx.cardview.widget.CardView>(R.id.reportConfigCard)?.visibility = View.GONE
-
                         // Fallback: show basic percentage info in share breakdown
-                        view.findViewById<TextView>(R.id.mySharePercentage)?.text = "₹${String.format("%,d", totalShare)} (100%)"
-                        view.findViewById<TextView>(R.id.friendSharePercentage)?.text = "₹0 (0%)"
+                        view.findViewById<TextView>(R.id.myOwnShareValue)?.text = "₹${formatNumber(totalShare)} (100%)"
+                        view.findViewById<TextView>(R.id.friendShareValue)?.text = "₹0 (0%)"
                     }
                 } else {
-                    // Hide report configuration section
-                    view.findViewById<androidx.cardview.widget.CardView>(R.id.reportConfigCard)?.visibility = View.GONE
-
                     // Fallback: show basic percentage info
-                    view.findViewById<TextView>(R.id.mySharePercentage)?.text = "₹${String.format("%,d", totalShare)} (100%)"
-                    view.findViewById<TextView>(R.id.friendSharePercentage)?.text = "₹0 (0%)"
+                    view.findViewById<TextView>(R.id.myOwnShareValue)?.text = "₹${formatNumber(totalShare)} (100%)"
+                    view.findViewById<TextView>(R.id.friendShareValue)?.text = "₹0 (0%)"
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                // Hide report configuration section
-                view.findViewById<androidx.cardview.widget.CardView>(R.id.reportConfigCard)?.visibility = View.GONE
-
                 // Fallback: show basic percentage info
-                view.findViewById<TextView>(R.id.mySharePercentage)?.text = "₹${String.format("%,d", totalShare)} (100%)"
-                view.findViewById<TextView>(R.id.friendSharePercentage)?.text = "₹0 (0%)"
+                view.findViewById<TextView>(R.id.myOwnShareValue)?.text = "₹${formatNumber(totalShare)} (100%)"
+                view.findViewById<TextView>(R.id.friendShareValue)?.text = "₹0 (0%)"
             }
         }
     }

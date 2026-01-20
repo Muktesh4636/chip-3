@@ -16,6 +16,8 @@ class AccountTransactionAdapter(
     private val onDeleteClick: ((Transaction) -> Unit)? = null
 ) : RecyclerView.Adapter<AccountTransactionAdapter.TransactionViewHolder>() {
 
+    private var selectedTransactionId: Int = -1
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): TransactionViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.item_account_transaction, parent, false)
@@ -24,11 +26,21 @@ class AccountTransactionAdapter(
 
     override fun onBindViewHolder(holder: TransactionViewHolder, position: Int) {
         val transaction = transactions[position]
-        holder.bind(transaction, position == 0, onDeleteClick) // Only show delete button for first (latest) transaction
+        holder.bind(transaction, selectedTransactionId == transaction.id, onDeleteClick)
+        holder.itemView.setOnLongClickListener {
+            selectedTransactionId = if (selectedTransactionId == transaction.id) -1 else transaction.id
+            notifyDataSetChanged()
+            true
+        }
     }
 
     override fun getItemCount(): Int = transactions.size
 
+
+    fun clearSelection() {
+        selectedTransactionId = -1
+        notifyDataSetChanged()
+    }
     fun updateTransactions(newTransactions: List<Transaction>) {
         transactions = newTransactions
         notifyDataSetChanged()
@@ -42,7 +54,7 @@ class AccountTransactionAdapter(
         private val notesText: TextView = itemView.findViewById(R.id.transactionNotes)
         private val deleteButton: Button = itemView.findViewById(R.id.btnDeleteTransaction)
 
-        fun bind(transaction: Transaction, isLatest: Boolean, onDeleteClick: ((Transaction) -> Unit)?) {
+        fun bind(transaction: Transaction, showDelete: Boolean, onDeleteClick: ((Transaction) -> Unit)?) {
             try {
                 // Format date safely - transaction.date is a String from API
                 val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
@@ -91,11 +103,10 @@ class AccountTransactionAdapter(
                 // Notes
                 notesText.text = transaction.notes ?: "-"
 
-                // Delete button only for latest transaction
-                deleteButton.visibility = if (isLatest) View.VISIBLE else View.GONE
-                deleteButton.setOnClickListener {
-                    onDeleteClick?.invoke(transaction)
-                }
+            deleteButton.visibility = if (showDelete) View.VISIBLE else View.GONE
+            deleteButton.setOnClickListener {
+                onDeleteClick?.invoke(transaction)
+            }
             } catch (e: Exception) {
                 e.printStackTrace()
                 // Set fallback values

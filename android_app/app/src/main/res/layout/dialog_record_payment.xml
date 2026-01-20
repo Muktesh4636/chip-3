@@ -59,41 +59,6 @@
 
         </androidx.cardview.widget.CardView>
 
-        <!-- Payment Info -->
-        <androidx.cardview.widget.CardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardCornerRadius="8dp"
-            app:cardElevation="0dp"
-            app:cardBackgroundColor="@color/warning_soft"
-            android:layout_marginBottom="16dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="💰 Payment Recording"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/warning"
-                    android:layout_marginBottom="4dp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="This records the payment in the audit trail. Optionally, you can update the exchange balance if this is a settlement payment."
-                    android:textSize="13sp"
-                    android:textColor="@color/warning" />
-
-            </LinearLayout>
-
-        </androidx.cardview.widget.CardView>
-
         <!-- Payment Direction (Hidden - derived from PnL) -->
         <TextView
             android:id="@+id/paymentDirectionLabel"

@@ -61,8 +61,7 @@ class TransactionsFragment : Fragment() {
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         adapter = TransactionsAdapter(
             emptyList(),
-            onItemClick = { txn -> showTxnDetail(txn) },
-            onItemLongClick = { txn -> showTxnActionMenu(txn) }
+            onItemClick = { txn -> showTxnDetail(txn) }
         )
         recyclerView.adapter = adapter
         
@@ -78,10 +77,6 @@ class TransactionsFragment : Fragment() {
 
         view.findViewById<Button>(R.id.btnAdvancedFilter).setOnClickListener {
             showAdvancedFilterDialog()
-        }
-
-        view.findViewById<Button>(R.id.btnBulkActions).setOnClickListener {
-            showBulkActionsDialog()
         }
     }
 
@@ -131,47 +126,6 @@ class TransactionsFragment : Fragment() {
         dialog.show()
     }
 
-    private fun showTxnActionMenu(txn: Transaction) {
-        val actions = arrayOf("📝 Edit Transaction", "🗑️ Delete Transaction", "📋 Copy Details")
-
-        AlertDialog.Builder(requireContext())
-            .setTitle("Transaction Actions")
-            .setItems(actions) { _, which ->
-                when (which) {
-                    0 -> showEditTxnDialog(txn)
-                    1 -> showDeleteConfirm(txn)
-                    2 -> copyTxnDetails(txn)
-                }
-            }
-            .show()
-    }
-
-    private fun showDeleteConfirm(txn: Transaction) {
-        AlertDialog.Builder(requireContext())
-            .setTitle("Delete Transaction?")
-            .setMessage("Are you sure you want to delete this ${txn.type_display} of ₹${String.format("%,d", txn.amount)}?")
-            .setPositiveButton("Delete") { _, _ -> deleteTxn(txn.id) }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun copyTxnDetails(txn: Transaction) {
-        val details = """
-            Transaction #${txn.sequence_no}
-            Type: ${txn.type_display}
-            Client: ${txn.client_name}
-            Exchange: ${txn.exchange_name}
-            Date: ${txn.date}
-            Amount: ₹${String.format("%,d", txn.amount)}
-            Notes: ${txn.notes ?: "None"}
-        """.trimIndent()
-
-        val clipboard = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-        val clip = android.content.ClipData.newPlainText("Transaction Details", details)
-        clipboard.setPrimaryClip(clip)
-        Toast.makeText(context, "Transaction details copied!", Toast.LENGTH_SHORT).show()
-    }
-
     private fun showAdvancedFilterDialog() {
         val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_advanced_filter, null)
         val dialog = AlertDialog.Builder(requireContext())
@@ -182,10 +136,7 @@ class TransactionsFragment : Fragment() {
         val spinnerType = dialogView.findViewById<Spinner>(R.id.spinnerFilterType)
         val spinnerClient = dialogView.findViewById<Spinner>(R.id.spinnerFilterClient)
         val spinnerExchange = dialogView.findViewById<Spinner>(R.id.spinnerFilterExchange)
-        val editMinAmount = dialogView.findViewById<EditText>(R.id.editMinAmount)
-        val editMaxAmount = dialogView.findViewById<EditText>(R.id.editMaxAmount)
         val btnApply = dialogView.findViewById<Button>(R.id.btnApplyFilters)
-        val btnClear = dialogView.findViewById<Button>(R.id.btnClearFilters)
 
         // Setup type spinner
         val types = arrayOf("All Types", "FUNDING", "TRADE", "RECORD_PAYMENT", "SETTLEMENT_SHARE")
@@ -223,22 +174,15 @@ class TransactionsFragment : Fragment() {
             applyAdvancedFilters(
                 spinnerType.selectedItem.toString(),
                 spinnerClient.selectedItem?.toString() ?: "All Clients",
-                spinnerExchange.selectedItem?.toString() ?: "All Exchanges",
-                editMinAmount.text.toString(),
-                editMaxAmount.text.toString()
+                spinnerExchange.selectedItem?.toString() ?: "All Exchanges"
             )
-            dialog.dismiss()
-        }
-
-        btnClear.setOnClickListener {
-            clearAdvancedFilters()
             dialog.dismiss()
         }
 
         dialog.show()
     }
 
-    private fun applyAdvancedFilters(type: String, client: String, exchange: String, minAmount: String, maxAmount: String) {
+    private fun applyAdvancedFilters(type: String, client: String, exchange: String) {
         var filtered = allTransactions
 
         // Filter by type
@@ -256,102 +200,8 @@ class TransactionsFragment : Fragment() {
             filtered = filtered.filter { it.exchange_name == exchange }
         }
 
-        // Filter by amount range
-        if (minAmount.isNotEmpty()) {
-            val min = minAmount.replace(",", "").toLongOrNull()
-            if (min != null) {
-                filtered = filtered.filter { it.amount >= min }
-            }
-        }
-
-        if (maxAmount.isNotEmpty()) {
-            val max = maxAmount.replace(",", "").toLongOrNull()
-            if (max != null) {
-                filtered = filtered.filter { it.amount <= max }
-            }
-        }
-
         adapter.updateTransactions(filtered)
         Toast.makeText(context, "Filtered to ${filtered.size} transactions", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun clearAdvancedFilters() {
-        adapter.updateTransactions(allTransactions)
-        Toast.makeText(context, "Filters cleared", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun showBulkActionsDialog() {
-        val actions = arrayOf("Enable Selection Mode", "Select All", "Select None", "Export Selected", "Delete Selected")
-
-        AlertDialog.Builder(requireContext())
-            .setTitle("Bulk Actions")
-            .setItems(actions) { _, which ->
-                when (which) {
-                    0 -> {
-                        adapter.setSelectionMode(true)
-                        Toast.makeText(context, "Selection mode enabled. Tap transactions to select.", Toast.LENGTH_SHORT).show()
-                    }
-                    1 -> adapter.selectAll()
-                    2 -> adapter.clearSelection()
-                    3 -> exportSelectedTransactions()
-                    4 -> deleteSelectedTransactions()
-                }
-            }
-            .show()
-    }
-
-    private fun exportSelectedTransactions() {
-        val selectedIds = adapter.getSelectedTransactionIds()
-        if (selectedIds.isEmpty()) {
-            Toast.makeText(context, "No transactions selected", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        Toast.makeText(context, "Exporting ${selectedIds.size} transactions...", Toast.LENGTH_SHORT).show()
-        // TODO: Implement CSV export
-    }
-
-    private fun deleteSelectedTransactions() {
-        val selectedIds = adapter.getSelectedTransactionIds()
-        if (selectedIds.isEmpty()) {
-            Toast.makeText(context, "No transactions selected", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        AlertDialog.Builder(requireContext())
-            .setTitle("Delete ${selectedIds.size} Transactions?")
-            .setMessage("This action cannot be undone. Are you sure?")
-            .setPositiveButton("Delete All") { _, _ ->
-                bulkDeleteTransactions(selectedIds)
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun bulkDeleteTransactions(ids: List<Int>) {
-        lifecycleScope.launch {
-            val token = prefManager.getToken() ?: return@launch
-            var successCount = 0
-            var errorCount = 0
-
-            for (id in ids) {
-                try {
-                    val response = apiService.deleteTransaction(ApiClient.getAuthToken(token), id)
-                    if (response.isSuccessful) {
-                        successCount++
-                    } else {
-                        errorCount++
-                    }
-                } catch (e: Exception) {
-                    errorCount++
-                }
-            }
-
-            Toast.makeText(context, "Deleted $successCount, failed $errorCount", Toast.LENGTH_SHORT).show()
-            if (successCount > 0) {
-                loadTransactions()
-            }
-        }
     }
 
     private fun showEditTxnDialog(txn: Transaction) {
@@ -437,33 +287,8 @@ class TransactionsFragment : Fragment() {
 
 class TransactionsAdapter(
     private var transactions: List<Transaction>,
-    private val onItemClick: (Transaction) -> Unit = {},
-    private val onItemLongClick: (Transaction) -> Unit = {}
-) : RecyclerView.Adapter<TransactionsAdapter.ViewHolder>() {
-
-    private val selectedItems = mutableSetOf<Int>()
-    private var selectionMode = false
-
-    fun setSelectionMode(enabled: Boolean) {
-        selectionMode = enabled
-        if (!enabled) {
-            selectedItems.clear()
-        }
-        notifyDataSetChanged()
-    }
-
-    fun selectAll() {
-        selectedItems.clear()
-        selectedItems.addAll(transactions.map { it.id })
-        notifyDataSetChanged()
-    }
-
-    fun clearSelection() {
-        selectedItems.clear()
-        notifyDataSetChanged()
-    }
-
-    fun getSelectedTransactionIds(): List<Int> = selectedItems.toList()
+    private val onItemClick: (Transaction) -> Unit = {}
+): RecyclerView.Adapter<TransactionsAdapter.ViewHolder>() {
 
     class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val typeText: TextView = itemView.findViewById(R.id.transactionTypeText)
@@ -471,7 +296,6 @@ class TransactionsAdapter(
         val dateText: TextView = itemView.findViewById(R.id.transactionDateText)
         val amountText: TextView = itemView.findViewById(R.id.transactionAmountText)
         val seqText: TextView = itemView.findViewById(R.id.txnSeqNo)
-        val checkbox: CheckBox? = itemView.findViewById(R.id.transactionCheckbox)
     }
     
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -488,37 +312,10 @@ class TransactionsAdapter(
         holder.amountText.text = "₹${String.format("%,d", txn.amount)}"
         holder.seqText.text = "#${txn.sequence_no}"
 
-        // Handle selection mode
-        if (selectionMode && holder.checkbox != null) {
-            holder.checkbox.visibility = View.VISIBLE
-            holder.checkbox.isChecked = selectedItems.contains(txn.id)
-            holder.checkbox.setOnCheckedChangeListener { _, isChecked ->
-                if (isChecked) {
-                    selectedItems.add(txn.id)
-                } else {
-                    selectedItems.remove(txn.id)
-                }
-            }
-        } else if (holder.checkbox != null) {
-            holder.checkbox.visibility = View.GONE
-        }
-
         holder.itemView.setOnClickListener {
-            if (selectionMode && holder.checkbox != null) {
-                holder.checkbox.isChecked = !holder.checkbox.isChecked
-            } else {
-                onItemClick(txn)
-            }
+            onItemClick(txn)
         }
 
-        holder.itemView.setOnLongClickListener {
-            if (!selectionMode) {
-                onItemLongClick(txn)
-            }
-            true
-        }
-
-        // Color coding for transactions
         if (txn.type.contains("SETTLEMENT") || txn.type.contains("PAYMENT")) {
             holder.amountText.setTextColor(holder.itemView.resources.getColor(R.color.danger, null))
         } else if (txn.type.contains("FUNDING") || txn.type.contains("PROFIT")) {

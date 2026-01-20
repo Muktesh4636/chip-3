@@ -38,37 +38,16 @@
             android:textSize="14sp"
             android:layout_marginTop="16dp" />
 
-        <LinearLayout
+        <Button
+            android:id="@+id/btnAdvancedFilter"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="16dp">
-
-            <Button
-                android:id="@+id/btnAdvancedFilter"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="🔍 Advanced Filter"
-                android:textSize="12sp"
-                android:backgroundTint="@color/sidebar_bg"
-                android:textColor="@color/text_main"
-                android:padding="8dp"
-                android:layout_marginEnd="8dp" />
-
-            <Button
-                android:id="@+id/btnBulkActions"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="⚡ Bulk Actions"
-                android:textSize="12sp"
-                android:backgroundTint="@color/primary"
-                android:textColor="@color/white"
-                android:padding="8dp"
-                android:layout_marginStart="8dp" />
-
-        </LinearLayout>
+            android:text="🔍 Advanced Filter"
+            android:textSize="12sp"
+            android:backgroundTint="@color/bg_card"
+            android:textColor="@color/text_main"
+            android:padding="12dp"
+            android:layout_marginTop="16dp" />
 
     </LinearLayout>
 

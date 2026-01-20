@@ -19,9 +19,18 @@ import com.transactionhub.utils.ApiClient
 import com.transactionhub.utils.PrefManager
 import kotlinx.coroutines.launch
 
+import android.os.Environment
 import android.widget.EditText
 import android.widget.Toast
+import java.io.File
+import java.io.IOException
 import androidx.appcompat.app.AlertDialog
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.os.Build
 import com.transactionhub.ui.accounts.AccountDetailFragment
 
 class PendingPaymentsFragment : Fragment() {
@@ -72,6 +81,41 @@ class PendingPaymentsFragment : Fragment() {
 
         // Load initial data
         loadPendingPayments()
+        
+        // Create notification channel for downloads
+        createNotificationChannel()
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = "File Downloads"
+            val descriptionText = "Notifications for downloaded reports"
+            val importance = NotificationManager.IMPORTANCE_DEFAULT
+            val channel = NotificationChannel("DOWNLOAD_CHANNEL", name, importance).apply {
+                description = descriptionText
+            }
+            val notificationManager: NotificationManager =
+                requireContext().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun showDownloadNotification(fileName: String, filePath: String) {
+        val builder = NotificationCompat.Builder(requireContext(), "DOWNLOAD_CHANNEL")
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle("Download Complete")
+            .setContentText("File saved: $fileName")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+
+        try {
+            with(NotificationManagerCompat.from(requireContext())) {
+                notify(System.currentTimeMillis().toInt(), builder.build())
+            }
+        } catch (e: SecurityException) {
+            // Permission for notifications might be missing on Android 13+
+            android.util.Log.e("NotificationError", "Notification permission missing", e)
+        }
     }
 
     private fun setupEventListeners() {
@@ -103,10 +147,12 @@ class PendingPaymentsFragment : Fragment() {
         dialogView.findViewById<TextView>(R.id.dialogTitle).text = "Record Payment: ${item.client_name}"
         
         // Set up account status info
+        val sharePct = String.format("%.1f", item.share_percentage)
         val statusText = "Funding: ₹${formatNumber(item.funding ?: 0)}\n" +
                          "Exchange Balance: ₹${formatNumber(item.exchange_balance ?: 0)}\n" +
                          "Client PnL: ₹${formatNumber(item.pnl)}\n" +
-                         "My Share: ₹${formatNumber(item.my_share)}"
+                         "My Share: ₹${formatNumber(item.my_share)}\n" +
+                         "Share %: $sharePct%"
         dialogView.findViewById<TextView>(R.id.accountStatusText).text = statusText
 
         // Amount input - pre-fill with remaining amount
@@ -249,7 +295,7 @@ class PendingPaymentsFragment : Fragment() {
         }
     }
 
-    private fun exportCsv() {
+        private fun exportCsv() {
         val token = prefManager.getToken() ?: return
 
         lifecycleScope.launch {
@@ -257,8 +303,13 @@ class PendingPaymentsFragment : Fragment() {
                 val response = apiService.exportPendingPayments(ApiClient.getAuthToken(token))
                 if (response.isSuccessful) {
                     val csvContent = response.body()?.string() ?: ""
-                    // For now, just show a toast - in a real app you'd save to file and share
-                    Toast.makeText(context, "CSV export would be available here", Toast.LENGTH_LONG).show()
+                    val file = saveCsvReport(csvContent)
+                    if (file != null) {
+                        Toast.makeText(context, "CSV saved to ${file.absolutePath}", Toast.LENGTH_LONG).show()
+                        showDownloadNotification(file.name, file.absolutePath)
+                    } else {
+                        Toast.makeText(context, "CSV export succeeded, but saving failed", Toast.LENGTH_LONG).show()
+                    }
                 } else {
                     Toast.makeText(context, "Error exporting CSV", Toast.LENGTH_SHORT).show()
                 }
@@ -269,7 +320,23 @@ class PendingPaymentsFragment : Fragment() {
         }
     }
 
-    private fun formatNumber(number: Long): String {
+    private fun saveCsvReport(content: String): File? {
+        return try {
+            val downloadsDir = requireContext().getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            if (downloadsDir == null) return null
+            if (!downloadsDir.exists()) {
+                downloadsDir.mkdirs()
+            }
+            val fileName = "pending-payments-${System.currentTimeMillis()}.csv"
+            val file = File(downloadsDir, fileName)
+            file.writeText(content)
+            file
+        } catch (e: IOException) {
+            e.printStackTrace()
+            null
+        }
+    }
+private fun formatNumber(number: Long): String {
         return String.format("%,d", number)
     }
 }

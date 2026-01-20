@@ -415,28 +415,29 @@ def api_record_payment(request, account_id):
 
             # 8. IF auto-refund enabled: Save FUNDING_AUTO transaction - SAME AS WEBSITE
             cycle_closed = False
-            if re_add_capital and client_pnl_before < 0:
-                # Auto re-funding: Funding = Funding + MaskedCapital
-                funding_before_refund = account.funding
-                exchange_before_refund = account.exchange_balance
+            if is_settlement:
+                if re_add_capital and client_pnl_before < 0:
+                    # Auto re-funding: Funding = Funding + MaskedCapital
+                    funding_before_refund = account.funding
+                    exchange_before_refund = account.exchange_balance
 
-                account.funding += int(masked_capital)
-                account.exchange_balance += int(masked_capital)
-                account.save()
+                    account.funding += int(masked_capital)
+                    account.exchange_balance += int(masked_capital)
+                    account.save()
 
-                # Create FUNDING_AUTO transaction
-                Transaction.objects.create(
-                    client_exchange=account,
-                    date=timezone.now(),
-                    type='FUNDING_AUTO',
-                    amount=int(masked_capital),
-                    funding_before=funding_before_refund,
-                    funding_after=account.funding,
-                    exchange_balance_before=exchange_before_refund,
-                    exchange_balance_after=account.exchange_balance,
-                    notes=f"Auto-refund after settlement: {int(masked_capital)}"
-                )
-                cycle_closed = True
+                    # Create FUNDING_AUTO transaction
+                    Transaction.objects.create(
+                        client_exchange=account,
+                        date=timezone.now(),
+                        type='FUNDING_AUTO',
+                        amount=int(masked_capital),
+                        funding_before=funding_before_refund,
+                        funding_after=account.funding,
+                        exchange_balance_before=exchange_before_refund,
+                        exchange_balance_after=account.exchange_balance,
+                        notes=f"Auto-refund after settlement: {int(masked_capital)}"
+                    )
+                    cycle_closed = True
             else:
                 # Simple payment recording for accounts with share = 0
                 print(f"DEBUG: Regular payment recording (share=0)")

@@ -79,7 +79,8 @@ data class PendingPaymentItem(
     val funding: Long = 0L,
     val exchange_balance: Long = 0L,
     val remaining_amount: Long = 0L,
-    val type: String
+    val type: String,
+    val share_percentage: Double = 0.0
 )
 
 data class PendingPaymentsResponse(
