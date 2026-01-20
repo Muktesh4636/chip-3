@@ -674,6 +674,39 @@ def api_reports_summary(request):
                 'tx_count': day_txns.count()
             })
 
+    # NEW: Client Performance for the selected period
+    client_performance = []
+    period_txns = Transaction.objects.filter(
+        client_exchange__client__user=request.user,
+        date__date__gte=start_date,
+        date__date__lte=today
+    )
+    
+    client_ids = accounts.values_list('client_id', flat=True).distinct()
+    for cid in client_ids:
+        client = Client.objects.get(id=cid)
+        client_txns = period_txns.filter(client_exchange__client_id=cid)
+        
+        # Calculate PnL (trading activity) and Settlements (your profit/loss)
+        client_pnl = 0
+        client_settlements = 0
+        
+        for tx in client_txns:
+            if tx.type == 'TRADE':
+                if tx.exchange_balance_before is not None and tx.exchange_balance_after is not None:
+                    client_pnl += (tx.exchange_balance_after - tx.exchange_balance_before)
+            elif tx.type in ['SETTLEMENT_SHARE', 'RECORD_PAYMENT']:
+                client_settlements += tx.amount
+        
+        if client_txns.exists():
+            client_performance.append({
+                'client_name': client.name,
+                'client_code': client.code,
+                'pnl': client_pnl,
+                'settlements': client_settlements, # Your actual profit/loss
+                'tx_count': client_txns.count()
+            })
+
     return Response({
         'overview': {
             'total_funding': total_funding,
@@ -684,6 +717,7 @@ def api_reports_summary(request):
             'friend_share': friend_total_share,
         },
         'daily_performance': daily_stats,
+        'client_performance': client_performance,
         'period': period,
         'start_date': start_date
     })

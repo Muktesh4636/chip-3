@@ -3634,9 +3634,10 @@ def report_daily(request):
     
     # Client-wise breakdown
     # Profit/Loss from RECORD_PAYMENT transactions
-    client_payment_data = payment_qs.values("client_exchange__client__name").annotate(
+    client_payment_data = payment_qs.values("client_exchange__client__name", "client_exchange__client__code").annotate(
         profit=Sum("amount", filter=Q(amount__gt=0)),
-        loss=Sum(Abs(F("amount")), filter=Q(amount__lt=0))
+        loss=Sum(Abs(F("amount")), filter=Q(amount__lt=0)),
+        net_profit=Sum("amount")
     )
     
     # Turnover from TRADE transactions (exchange balance movement) per client
@@ -3654,18 +3655,24 @@ def report_daily(request):
     client_data = []
     for item in client_payment_data:
         client_name = item["client_exchange__client__name"]
+        client_code = item["client_exchange__client__code"]
         client_data.append({
-            "client_exchange__client__name": client_name,
+            "name": client_name,
+            "code": client_code,
             "profit": item["profit"] or 0,
             "loss": item["loss"] or 0,
+            "net_profit": item["net_profit"] or 0,
             "turnover": client_turnover_map.get(client_name, 0)
         })
     
-    # Sort by turnover and limit to top 10
-    client_data = sorted(client_data, key=lambda x: x["turnover"], reverse=True)[:10]
+    # Sort by net profit descending
+    client_performance = sorted(client_data, key=lambda x: x["net_profit"], reverse=True)
     
-    client_labels = [item["client_exchange__client__name"] for item in client_data]
-    client_profits = [float(item["profit"] or 0) for item in client_data]
+    # Sort by turnover and limit to top 10 for charts
+    client_data_chart = sorted(client_data, key=lambda x: x["turnover"], reverse=True)[:10]
+    
+    client_labels = [item["name"] for item in client_data_chart]
+    client_profits = [float(item["profit"] or 0) for item in client_data_chart]
     
     # Analysis
     net_profit = float(your_total_profit)  # Net profit = signed sum
@@ -3689,6 +3696,7 @@ def report_daily(request):
         "type_colors": json.dumps(type_colors),
         "client_labels": json.dumps(client_labels),
         "client_profits": json.dumps(client_profits),
+        "client_performance": client_performance,
     }
     return render(request, "core/reports/daily.html", context)
 
@@ -3866,6 +3874,38 @@ def report_weekly(request):
     profit_margin = (float(your_profit) / float(total_turnover) * 100) if total_turnover > 0 else 0
     avg_daily_turnover = float(total_turnover) / 7
     
+    # Client-wise breakdown for the week
+    client_payment_data = payment_qs.values("client_exchange__client__name", "client_exchange__client__code").annotate(
+        profit=Sum("amount", filter=Q(amount__gt=0)),
+        loss=Sum(Abs(F("amount")), filter=Q(amount__lt=0)),
+        net_profit=Sum("amount")
+    )
+    
+    # Turnover from TRADE transactions per client
+    client_turnover_map = {}
+    client_trade_names = trade_qs.values_list("client_exchange__client__name", flat=True).distinct()
+    for client_name in client_trade_names:
+        client_trades = trade_qs.filter(client_exchange__client__name=client_name)
+        client_turnover = sum(
+            abs(tx.exchange_balance_after - tx.exchange_balance_before)
+            for tx in client_trades
+        ) or 0
+        client_turnover_map[client_name] = client_turnover
+    
+    client_data = []
+    for item in client_payment_data:
+        client_name = item["client_exchange__client__name"]
+        client_data.append({
+            "name": client_name,
+            "code": item["client_exchange__client__code"],
+            "profit": item["profit"] or 0,
+            "loss": item["loss"] or 0,
+            "net_profit": item["net_profit"] or 0,
+            "turnover": client_turnover_map.get(client_name, 0)
+        })
+    
+    client_performance = sorted(client_data, key=lambda x: x["net_profit"], reverse=True)
+
     context = {
         "week_start": week_start,
         "week_end": week_end,
@@ -3887,6 +3927,7 @@ def report_weekly(request):
         "type_labels": json.dumps(type_labels),
         "type_amounts": json.dumps(type_amounts),
         "type_colors": json.dumps(type_colors),
+        "client_performance": client_performance,
     }
     return render(request, "core/reports/weekly.html", context)
 
@@ -4102,6 +4143,38 @@ def report_monthly(request):
     days_in_month = (month_end - month_start).days + 1
     avg_daily_turnover = float(total_turnover) / days_in_month if days_in_month > 0 else 0
     
+    # Client-wise breakdown for the month
+    client_payment_data = payment_qs.values("client_exchange__client__name", "client_exchange__client__code").annotate(
+        profit=Sum("amount", filter=Q(amount__gt=0)),
+        loss=Sum(Abs(F("amount")), filter=Q(amount__lt=0)),
+        net_profit=Sum("amount")
+    )
+    
+    # Turnover from TRADE transactions per client
+    client_turnover_map = {}
+    client_trade_names = trade_qs.values_list("client_exchange__client__name", flat=True).distinct()
+    for client_name in client_trade_names:
+        client_trades = trade_qs.filter(client_exchange__client__name=client_name)
+        client_turnover = sum(
+            abs(tx.exchange_balance_after - tx.exchange_balance_before)
+            for tx in client_trades
+        ) or 0
+        client_turnover_map[client_name] = client_turnover
+    
+    client_data = []
+    for item in client_payment_data:
+        client_name = item["client_exchange__client__name"]
+        client_data.append({
+            "name": client_name,
+            "code": item["client_exchange__client__code"],
+            "profit": item["profit"] or 0,
+            "loss": item["loss"] or 0,
+            "net_profit": item["net_profit"] or 0,
+            "turnover": client_turnover_map.get(client_name, 0)
+        })
+    
+    client_performance = sorted(client_data, key=lambda x: x["net_profit"], reverse=True)
+
     context = {
         "month_start": month_start,
         "month_end": month_end,
@@ -4125,6 +4198,7 @@ def report_monthly(request):
         "type_colors": json.dumps(type_colors),
         "client_labels": json.dumps(client_labels),
         "client_profits": json.dumps(client_profits),
+        "client_performance": client_performance,
     }
     return render(request, "core/reports/monthly.html", context)
 

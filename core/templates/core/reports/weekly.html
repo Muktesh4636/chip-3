@@ -89,6 +89,43 @@
     </div>
 </div>
 
+<!-- Client Performance Table -->
+<div class="table-wrapper mt-4">
+    <div class="table-header">
+        <div>Client-wise Performance (Weekly)</div>
+    </div>
+    <table>
+        <thead>
+        <tr>
+            <th>Client</th>
+            <th>U_CODE</th>
+            <th>Turnover</th>
+            <th>Profit (+)</th>
+            <th>Loss (-)</th>
+            <th>Net Profit</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for item in client_performance %}
+            <tr>
+                <td><strong>{{ item.name }}</strong></td>
+                <td>{{ item.code|default:"-" }}</td>
+                <td>₹ {{ item.turnover|indian_number_format }}</td>
+                <td class="positive">₹ {{ item.profit|indian_number_format }}</td>
+                <td class="negative">₹ {{ item.loss|indian_number_format }}</td>
+                <td class="{% if item.net_profit >= 0 %}positive{% else %}negative{% endif %}">
+                    <strong>₹ {{ item.net_profit|indian_number_format }}</strong>
+                </td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td colspan="6">No client performance data for this week.</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
 <div class="table-wrapper mt-4">
     <div class="table-header">
         <div>Transactions ({{ transactions|length }})</div>
