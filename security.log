@@ -64,3 +64,5 @@ ERROR 2026-01-19 11:44:34,737 middleware 500 ERROR at /api/login/
 ERROR 2026-01-19 11:44:35,135 middleware 500 ERROR at /api/login/
 WARNING 2026-01-19 19:41:27,113 views CSRF failure: CSRF token from POST incorrect. from IP: 127.0.0.1
 WARNING 2026-01-19 19:41:27,135 log Forbidden (CSRF token from POST incorrect.): /login/
+WARNING 2026-01-20 09:17:39,371 views CSRF failure: CSRF token from POST incorrect. from IP: 127.0.0.1
+WARNING 2026-01-20 09:17:39,390 log Forbidden (CSRF token from POST incorrect.): /login/

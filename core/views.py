@@ -3342,8 +3342,6 @@ def transaction_edit(request, pk):
     return render(request, "core/transactions/edit.html", {"transaction": transaction})
 
 
-@login_required
-@require_http_methods(["POST"])
 def transaction_delete_logic(transaction):
     """Core logic to delete a transaction and revert balances, shared between web and API."""
     from django.db import transaction as db_transaction
@@ -3387,6 +3385,7 @@ def transaction_delete_logic(transaction):
         # 6. Force a fresh re-lock of the share based on the NEW reverted balances
         account.lock_initial_share_if_needed()
 
+@login_required
 def transaction_delete(request, pk):
     """Delete only the latest transaction and revert account balances."""
     from django.contrib import messages

@@ -5,7 +5,6 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
-import com.google.android.material.snackbar.Snackbar
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -238,13 +237,6 @@ class ClientDetailFragment : Fragment() {
                     } else {
                         view?.findViewById<TextView>(R.id.emptyAccountsText)?.visibility = View.GONE
                         recyclerView.visibility = View.VISIBLE
-                        view?.let { parent ->
-                            val msg = "Loaded ${filteredAccounts.size} linked exchange(s)"
-                            Snackbar.make(parent, msg, Snackbar.LENGTH_SHORT)
-                                .setBackgroundTint(resources.getColor(R.color.primary, null))
-                                .setTextColor(resources.getColor(R.color.white, null))
-                                .show()
-                        }
                     }
                 } else {
                     val errorBody = response.errorBody()?.string()

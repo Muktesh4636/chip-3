@@ -883,6 +883,14 @@ def api_delete_transaction(request, pk):
     try:
         from .views import transaction_delete_logic
         transaction = Transaction.objects.get(id=pk, client_exchange__client__user=request.user)
+        account = transaction.client_exchange
+        
+        # Check if this is the latest transaction for this account
+        latest_tx = Transaction.objects.filter(client_exchange=account).order_by('-created_at', '-id').first()
+        
+        if not latest_tx or transaction.pk != latest_tx.pk:
+            return Response({'error': 'Only the last transaction can be deleted to maintain logic consistency.'}, status=400)
+            
         transaction_delete_logic(transaction)
         return Response({'status': 'success'})
     except Transaction.DoesNotExist:

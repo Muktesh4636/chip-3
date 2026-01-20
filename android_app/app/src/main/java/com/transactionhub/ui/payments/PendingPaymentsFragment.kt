@@ -31,6 +31,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
+import android.app.PendingIntent
+import android.content.ContentValues
+import android.provider.MediaStore
+import androidx.core.content.FileProvider
 import com.transactionhub.ui.accounts.AccountDetailFragment
 
 class PendingPaymentsFragment : Fragment() {
@@ -100,20 +104,32 @@ class PendingPaymentsFragment : Fragment() {
         }
     }
 
-    private fun showDownloadNotification(fileName: String, filePath: String) {
+    private fun showDownloadNotification(fileName: String, uri: Uri) {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "text/csv")
+            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            requireContext(),
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val builder = NotificationCompat.Builder(requireContext(), "DOWNLOAD_CHANNEL")
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle("Download Complete")
-            .setContentText("File saved: $fileName")
+            .setContentText("File saved to Downloads: $fileName")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
 
         try {
             with(NotificationManagerCompat.from(requireContext())) {
                 notify(System.currentTimeMillis().toInt(), builder.build())
             }
         } catch (e: SecurityException) {
-            // Permission for notifications might be missing on Android 13+
             android.util.Log.e("NotificationError", "Notification permission missing", e)
         }
     }
@@ -303,10 +319,11 @@ class PendingPaymentsFragment : Fragment() {
                 val response = apiService.exportPendingPayments(ApiClient.getAuthToken(token))
                 if (response.isSuccessful) {
                     val csvContent = response.body()?.string() ?: ""
-                    val file = saveCsvReport(csvContent)
-                    if (file != null) {
-                        Toast.makeText(context, "CSV saved to ${file.absolutePath}", Toast.LENGTH_LONG).show()
-                        showDownloadNotification(file.name, file.absolutePath)
+                    val uri = saveCsvToPublicDownloads(csvContent)
+                    if (uri != null) {
+                        val fileName = "Pending_Payments_${System.currentTimeMillis()}.csv"
+                        Toast.makeText(context, "CSV saved to Downloads folder", Toast.LENGTH_LONG).show()
+                        showDownloadNotification(fileName, uri)
                     } else {
                         Toast.makeText(context, "CSV export succeeded, but saving failed", Toast.LENGTH_LONG).show()
                     }
@@ -320,18 +337,38 @@ class PendingPaymentsFragment : Fragment() {
         }
     }
 
-    private fun saveCsvReport(content: String): File? {
+    private fun saveCsvToPublicDownloads(content: String): Uri? {
+        val fileName = "Pending_Payments_${System.currentTimeMillis()}.csv"
+        
         return try {
-            val downloadsDir = requireContext().getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-            if (downloadsDir == null) return null
-            if (!downloadsDir.exists()) {
-                downloadsDir.mkdirs()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val resolver = requireContext().contentResolver
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                }
+                
+                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                if (uri != null) {
+                    resolver.openOutputStream(uri)?.use { outputStream ->
+                        outputStream.write(content.toByteArray())
+                    }
+                    uri
+                } else null
+            } else {
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                if (!downloadsDir.exists()) downloadsDir.mkdirs()
+                val file = File(downloadsDir, fileName)
+                file.writeText(content)
+                // Use FileProvider for older versions to get a shareable content URI
+                FileProvider.getUriForFile(
+                    requireContext(),
+                    "${requireContext().packageName}.fileprovider",
+                    file
+                )
             }
-            val fileName = "pending-payments-${System.currentTimeMillis()}.csv"
-            val file = File(downloadsDir, fileName)
-            file.writeText(content)
-            file
-        } catch (e: IOException) {
+        } catch (e: Exception) {
             e.printStackTrace()
             null
         }
